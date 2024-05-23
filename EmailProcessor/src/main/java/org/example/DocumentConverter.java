@@ -44,7 +44,7 @@ public class DocumentConverter {
             System.out.println("Usage: java -jar DocumentConverter.jar <LibreOfficeProgramFolder> <inputFile> <outputFile>");
         }
         try {
-            convertToPDF("/Applications/LibreOffice.app/Contents/MacOS", "/Users/sadanandsingh/Downloads/YouTube.html", "/Users/sadanandsingh/Downloads/YouTube.pdf");
+            convertToPDF("Enter Your sOffice Executable Location Here", "Input File ", "Output File should end in .pdf");
         } catch (Exception e) {
             e.printStackTrace();
         }
