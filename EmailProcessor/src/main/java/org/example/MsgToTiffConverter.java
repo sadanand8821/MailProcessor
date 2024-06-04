@@ -2,8 +2,11 @@ package org.example;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.pdfbox.rendering.ImageType;
 import org.apache.poi.hsmf.MAPIMessage;
 import org.apache.poi.hsmf.datatypes.AttachmentChunks;
+import org.apache.poi.hsmf.exceptions.ChunkNotFoundException;
+
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
@@ -31,16 +34,16 @@ public class MsgToTiffConverter {
         String emailContent = msg.getTextBody();
         List<AttachmentChunks> attachments = List.of(msg.getAttachmentFiles());
 
-        // Convert email content to an image
+        // Convert email content to an image with proper formatting
         BufferedImage emailImage = renderTextToImage(emailContent);
 
-        // Convert attachments to images
+        // Convert attachments to images in grayscale
         List<BufferedImage> attachmentImages = new ArrayList<>();
         for (AttachmentChunks attachment : attachments) {
             String filename = attachment.getAttachLongFileName().getValue();
             if (filename != null && filename.endsWith(".pdf")) {
                 InputStream attachmentStream = new ByteArrayInputStream(attachment.getAttachData().getValue());
-                attachmentImages.addAll(convertPdfToImages(attachmentStream));
+                attachmentImages.addAll(convertPdfToGrayImages(attachmentStream));
             }
         }
 
@@ -60,18 +63,27 @@ public class MsgToTiffConverter {
         g2d.setPaint(Color.WHITE);
         g2d.fillRect(0, 0, width, height);
         g2d.setPaint(Color.BLACK);
-        g2d.drawString(text, 10, 20);
+        g2d.setFont(new Font("Serif", Font.PLAIN, 14));
+
+        // Splitting the text into lines and rendering with proper formatting
+        int lineHeight = g2d.getFontMetrics().getHeight();
+        int y = lineHeight;
+        for (String line : text.split("\n")) {
+            g2d.drawString(line, 10, y);
+            y += lineHeight;
+        }
+
         g2d.dispose();
         return image;
     }
 
-    private static List<BufferedImage> convertPdfToImages(InputStream pdfStream) throws IOException {
+    private static List<BufferedImage> convertPdfToGrayImages(InputStream pdfStream) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
         PDDocument document = PDDocument.load(pdfStream);
         PDFRenderer pdfRenderer = new PDFRenderer(document);
 
         for (int page = 0; page < document.getNumberOfPages(); ++page) {
-            BufferedImage image = pdfRenderer.renderImageWithDPI(page, 300);
+            BufferedImage image = pdfRenderer.renderImageWithDPI(page, 300, ImageType.GRAY);
             images.add(image);
         }
         document.close();
