@@ -1,13 +1,14 @@
 package org.example;
+
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.poi.hsmf.MAPIMessage;
 import org.apache.poi.hsmf.datatypes.AttachmentChunks;
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
+
+import javax.imageio.*;
+import javax.imageio.metadata.IIOMetadata;
+import javax.imageio.metadata.IIOMetadataNode;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -29,7 +30,7 @@ public class MsgToTiffConverter {
         // Extract email content and attachments
         MAPIMessage msg = new MAPIMessage(msgFilePath);
         String emailContent = msg.getTextBody();
-        List<AttachmentChunks> attachments = msg.getAttachmentFiles();
+        List<AttachmentChunks> attachments = List.of(msg.getAttachmentFiles());
 
         // Convert email content to an image with proper formatting
         BufferedImage emailImage = renderTextToImage(emailContent);
@@ -37,9 +38,9 @@ public class MsgToTiffConverter {
         // Convert attachments to images in grayscale
         List<BufferedImage> attachmentImages = new ArrayList<>();
         for (AttachmentChunks attachment : attachments) {
-            String filename = attachment.attachLongFileName.getValue();
+            String filename = attachment.getAttachLongFileName().getValue();
             if (filename != null && filename.endsWith(".pdf")) {
-                InputStream attachmentStream = new ByteArrayInputStream(attachment.attachData.getValue());
+                InputStream attachmentStream = new ByteArrayInputStream(attachment.getAttachData().getValue());
                 attachmentImages.addAll(convertPdfToGrayImages(attachmentStream));
             }
         }
@@ -97,11 +98,20 @@ public class MsgToTiffConverter {
         PDFRenderer pdfRenderer = new PDFRenderer(document);
 
         for (int page = 0; page < document.getNumberOfPages(); ++page) {
-            BufferedImage image = pdfRenderer.renderImageWithDPI(page, 300, ImageType.GRAY);
-            images.add(image);
+            BufferedImage image = pdfRenderer.renderImageWithDPI(page, 600, ImageType.GRAY);  // Increased DPI
+            BufferedImage cleanedImage = cleanImage(image);
+            images.add(cleanedImage);
         }
         document.close();
         return images;
+    }
+
+    private static BufferedImage cleanImage(BufferedImage image) {
+        BufferedImage grayImage = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
+        Graphics g = grayImage.getGraphics();
+        g.drawImage(image, 0, 0, null);
+        g.dispose();
+        return grayImage;
     }
 
     private static void saveAsMultiPageTiff(List<BufferedImage> images, String tiffFilePath) throws IOException {
@@ -113,12 +123,37 @@ public class MsgToTiffConverter {
         ImageOutputStream ios = ImageIO.createImageOutputStream(new File(tiffFilePath));
         writer.setOutput(ios);
         ImageWriteParam param = writer.getDefaultWriteParam();
+        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+        param.setCompressionType("LZW");  // Use LZW compression
+
         writer.prepareWriteSequence(null);
 
         for (BufferedImage image : images) {
-            writer.writeToSequence(new IIOImage(image, null, null), param);
+            writer.writeToSequence(new IIOImage(image, null, getMetadata(writer, image)), param);
         }
         writer.endWriteSequence();
         ios.close();
+    }
+
+    private static IIOMetadata getMetadata(ImageWriter writer, BufferedImage image) throws IOException {
+        ImageWriteParam writeParam = writer.getDefaultWriteParam();
+        ImageTypeSpecifier typeSpecifier = ImageTypeSpecifier.createFromBufferedImageType(image.getType());
+
+        IIOMetadata metadata = writer.getDefaultImageMetadata(typeSpecifier, writeParam);
+
+        if (metadata.isReadOnly() || !metadata.isStandardMetadataFormatSupported()) {
+            return metadata;
+        }
+
+        String metaFormatName = metadata.getNativeMetadataFormatName();
+        IIOMetadataNode root = (IIOMetadataNode) metadata.getAsTree(metaFormatName);
+        IIOMetadataNode compression = new IIOMetadataNode("Compression");
+        IIOMetadataNode compressionTypeName = new IIOMetadataNode("CompressionTypeName");
+        compressionTypeName.setAttribute("value", "LZW");
+        compression.appendChild(compressionTypeName);
+        root.appendChild(compression);
+        metadata.setFromTree(metaFormatName, root);
+
+        return metadata;
     }
 }
