@@ -1,12 +1,9 @@
 package org.example;
-
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.poi.hsmf.MAPIMessage;
 import org.apache.poi.hsmf.datatypes.AttachmentChunks;
-import org.apache.poi.hsmf.exceptions.ChunkNotFoundException;
-
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
@@ -32,7 +29,7 @@ public class MsgToTiffConverter {
         // Extract email content and attachments
         MAPIMessage msg = new MAPIMessage(msgFilePath);
         String emailContent = msg.getTextBody();
-        List<AttachmentChunks> attachments = List.of(msg.getAttachmentFiles());
+        List<AttachmentChunks> attachments = msg.getAttachmentFiles();
 
         // Convert email content to an image with proper formatting
         BufferedImage emailImage = renderTextToImage(emailContent);
@@ -40,9 +37,9 @@ public class MsgToTiffConverter {
         // Convert attachments to images in grayscale
         List<BufferedImage> attachmentImages = new ArrayList<>();
         for (AttachmentChunks attachment : attachments) {
-            String filename = attachment.getAttachLongFileName().getValue();
+            String filename = attachment.attachLongFileName.getValue();
             if (filename != null && filename.endsWith(".pdf")) {
-                InputStream attachmentStream = new ByteArrayInputStream(attachment.getAttachData().getValue());
+                InputStream attachmentStream = new ByteArrayInputStream(attachment.attachData.getValue());
                 attachmentImages.addAll(convertPdfToGrayImages(attachmentStream));
             }
         }
@@ -58,6 +55,7 @@ public class MsgToTiffConverter {
     private static BufferedImage renderTextToImage(String text) {
         int width = 800;
         int height = 1000;
+        int padding = 20;
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Graphics2D g2d = image.createGraphics();
         g2d.setPaint(Color.WHITE);
@@ -65,16 +63,32 @@ public class MsgToTiffConverter {
         g2d.setPaint(Color.BLACK);
         g2d.setFont(new Font("Serif", Font.PLAIN, 14));
 
-        // Splitting the text into lines and rendering with proper formatting
-        int lineHeight = g2d.getFontMetrics().getHeight();
-        int y = lineHeight;
+        FontMetrics fm = g2d.getFontMetrics();
+        int lineHeight = fm.getHeight();
+        int y = padding + lineHeight;
+        int maxLineWidth = width - 2 * padding;
+
         for (String line : text.split("\n")) {
-            g2d.drawString(line, 10, y);
-            y += lineHeight;
+            while (line.length() > 0) {
+                int len = fm.stringWidth(line) <= maxLineWidth ? line.length() : findWrapPosition(line, fm, maxLineWidth);
+                g2d.drawString(line.substring(0, len), padding, y);
+                line = line.substring(len).trim();
+                y += lineHeight;
+            }
         }
 
         g2d.dispose();
         return image;
+    }
+
+    private static int findWrapPosition(String line, FontMetrics fm, int maxLineWidth) {
+        int len = line.length();
+        for (int i = 0; i < len; i++) {
+            if (fm.stringWidth(line.substring(0, i)) > maxLineWidth) {
+                return i - 1;
+            }
+        }
+        return len;
     }
 
     private static List<BufferedImage> convertPdfToGrayImages(InputStream pdfStream) throws IOException {
