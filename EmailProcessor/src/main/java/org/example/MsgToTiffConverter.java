@@ -168,8 +168,8 @@ public class MsgToTiffConverter {
         // Read the HTML content from the InputStream
         Document document = Jsoup.parse(htmlStream, "UTF-8", "");
 
-        // Convert the Document to a String
-        String htmlContent = document.html();
+        // Replace problematic entities with their numeric equivalents
+        String htmlContent = document.html().replace("&nbsp;", "&#160;");
 
         // Render the HTML content to an image
         BufferedImage image = renderHtmlToImage(htmlContent);
