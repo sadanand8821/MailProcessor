@@ -73,44 +73,43 @@ public class MsgToTiffConverter {
     }
 
     private static BufferedImage renderTextToImage(String text) {
-        int width = 800;
-        int height = 1000;
-        int padding = 20;
-        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g2d = image.createGraphics();
-        g2d.setPaint(Color.WHITE);
-        g2d.fillRect(0, 0, width, height);
-        g2d.setPaint(Color.BLACK);
-        g2d.setFont(new Font("Serif", Font.PLAIN, 14));
+    int width = 800;
+    int height = 1000;
+    int padding = 20;
+    BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+    Graphics2D g2d = image.createGraphics();
+    g2d.setPaint(Color.WHITE);
+    g2d.fillRect(0, 0, width, height);
+    g2d.setPaint(Color.BLACK);
+    g2d.setFont(new Font("Serif", Font.PLAIN, 14));
 
-        FontMetrics fm = g2d.getFontMetrics();
-        int lineHeight = fm.getHeight();
-        int y = padding + lineHeight;
-        int maxLineWidth = width - 2 * padding;
+    FontMetrics fm = g2d.getFontMetrics();
+    int lineHeight = fm.getHeight();
+    int y = padding + lineHeight;
+    int maxLineWidth = width - 2 * padding;
 
-        for (String line : text.split("\n")) {
-            while (line.length() > 0) {
-                int len = fm.stringWidth(line) <= maxLineWidth ? line.length() : findWrapPosition(line, fm, maxLineWidth);
-                g2d.drawString(line.substring(0, len), padding, y);
-                line = line.substring(len).trim();
-                y += lineHeight;
-            }
+    for (String line : text.split("\n")) {
+        while (line.length() > 0) {
+            int len = fm.stringWidth(line) <= maxLineWidth ? line.length() : findWrapPosition(line, fm, maxLineWidth);
+            g2d.drawString(line.substring(0, len), padding, y);
+            line = line.substring(len).trim();
+            y += lineHeight;
         }
-
-        g2d.dispose();
-        return image;
     }
 
-    private static int findWrapPosition(String line, FontMetrics fm, int maxLineWidth) {
-        int len = line.length();
-        for (int i = 0; i < len; i++) {
-            if (fm.stringWidth(line.substring(0, i)) > maxLineWidth) {
-                return i - 1;
-            }
-        }
-        return len;
-    }
+    g2d.dispose();
+    return image;
+}
 
+private static int findWrapPosition(String line, FontMetrics fm, int maxLineWidth) {
+    int len = line.length();
+    for (int i = 0; i < len; i++) {
+        if (fm.stringWidth(line.substring(0, i)) > maxLineWidth) {
+            return i - 1;
+        }
+    }
+    return len;
+}
     private static List<BufferedImage> convertPdfToGrayImages(InputStream pdfStream) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
         PDDocument document = PDDocument.load(pdfStream);
@@ -127,16 +126,26 @@ public class MsgToTiffConverter {
     private static List<BufferedImage> convertDocToGrayImages(InputStream docStream) throws IOException {
     List<BufferedImage> images = new ArrayList<>();
     byte[] docBytes = inputStreamToByteArray(docStream);
+    
+    // Log byte array size
+    System.out.println("Byte array size: " + docBytes.length);
+
+    // Optionally, print a portion of the byte array as a string to verify content
+    String contentSnippet = new String(docBytes, 0, Math.min(docBytes.length, 1000));
+    System.out.println("Input stream content snippet: " + contentSnippet);
+
     ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(docBytes);
 
     try {
         // Attempt to read as a DOC file
+        System.out.println("Attempting to read as DOC file...");
         HWPFDocument document = new HWPFDocument(byteArrayInputStream);
         WordExtractor extractor = new WordExtractor(document);
         String[] paragraphs = extractor.getParagraphText();
 
         // Render each paragraph to an image
         for (String paragraph : paragraphs) {
+            System.out.println("DOC Paragraph: " + paragraph);
             images.add(renderTextToImage(paragraph));
         }
         document.close();
@@ -175,17 +184,34 @@ public class MsgToTiffConverter {
         return images;
     }
 
-    private static List<BufferedImage> convertRtfToGrayImages(InputStream rtfStream) {
+   private static List<BufferedImage> convertRtfToGrayImages(InputStream rtfStream) {
     List<BufferedImage> images = new ArrayList<>();
     try {
-        javax.swing.text.rtf.RTFEditorKit rtfParser = new javax.swing.text.rtf.RTFEditorKit();
+        System.out.println("Attempting to read as RTF file...");
+
+        // Initialize the RTF parser and document
+        RTFEditorKit rtfParser = new RTFEditorKit();
         javax.swing.text.Document rtfDoc = rtfParser.createDefaultDocument();
+
+        // Read the RTF content into the document
+        System.out.println("Reading RTF content...");
         rtfParser.read(rtfStream, rtfDoc, 0);
+
+        // Extract the text from the document
         String text = rtfDoc.getText(0, rtfDoc.getLength());
 
-        images.add(renderTextToImage(text));
+        // Log the extracted RTF text
+        System.out.println("Extracted RTF Text: " + text);
+
+        // Render the extracted text to an image
+        if (!text.trim().isEmpty()) {
+            images.add(renderTextToImage(text));
+        } else {
+            System.out.println("RTF content is empty.");
+        }
     } catch (Exception e) {
         System.out.println("Error processing RTF file: " + e.getMessage());
+        e.printStackTrace();
     }
     return images;
 }
