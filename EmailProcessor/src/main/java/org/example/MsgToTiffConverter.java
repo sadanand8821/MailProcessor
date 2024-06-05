@@ -5,11 +5,22 @@ import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.poi.hsmf.MAPIMessage;
 import org.apache.poi.hsmf.datatypes.AttachmentChunks;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.hwpf.HWPFDocument;
+import org.apache.poi.hwpf.extractor.WordExtractor;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
-import javax.imageio.*;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
 import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.metadata.IIOMetadataNode;
 import javax.imageio.stream.ImageOutputStream;
+import javax.imageio.ImageTypeSpecifier;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
@@ -39,9 +50,17 @@ public class MsgToTiffConverter {
         List<BufferedImage> attachmentImages = new ArrayList<>();
         for (AttachmentChunks attachment : attachments) {
             String filename = attachment.getAttachLongFileName().getValue();
-            if (filename != null && filename.endsWith(".pdf")) {
+            if (filename != null) {
                 InputStream attachmentStream = new ByteArrayInputStream(attachment.getAttachData().getValue());
-                attachmentImages.addAll(convertPdfToGrayImages(attachmentStream));
+                if (filename.endsWith(".pdf")) {
+                    attachmentImages.addAll(convertPdfToGrayImages(attachmentStream));
+                } else if (filename.endsWith(".doc")) {
+                    attachmentImages.addAll(convertDocToGrayImages(attachmentStream));
+                } else if (filename.endsWith(".docx")) {
+                    attachmentImages.addAll(convertDocxToGrayImages(attachmentStream));
+                } else if (filename.endsWith(".htm") || filename.endsWith(".html")) {
+                    attachmentImages.addAll(convertHtmlToGrayImages(attachmentStream));
+                }
             }
         }
 
@@ -98,20 +117,48 @@ public class MsgToTiffConverter {
         PDFRenderer pdfRenderer = new PDFRenderer(document);
 
         for (int page = 0; page < document.getNumberOfPages(); ++page) {
-            BufferedImage image = pdfRenderer.renderImageWithDPI(page, 600, ImageType.GRAY);  // Increased DPI
-            BufferedImage cleanedImage = cleanImage(image);
-            images.add(cleanedImage);
+            BufferedImage image = pdfRenderer.renderImageWithDPI(page, 300, ImageType.GRAY);
+            images.add(image);
         }
         document.close();
         return images;
     }
 
-    private static BufferedImage cleanImage(BufferedImage image) {
-        BufferedImage grayImage = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
-        Graphics g = grayImage.getGraphics();
-        g.drawImage(image, 0, 0, null);
-        g.dispose();
-        return grayImage;
+    private static List<BufferedImage> convertDocToGrayImages(InputStream docStream) throws IOException {
+        List<BufferedImage> images = new ArrayList<>();
+        HWPFDocument document = new HWPFDocument(docStream);
+        WordExtractor extractor = new WordExtractor(document);
+        String[] paragraphs = extractor.getParagraphText();
+
+        // Render each paragraph to an image
+        for (String paragraph : paragraphs) {
+            images.add(renderTextToImage(paragraph));
+        }
+
+        return images;
+    }
+
+    private static List<BufferedImage> convertDocxToGrayImages(InputStream docxStream) throws IOException {
+        List<BufferedImage> images = new ArrayList<>();
+        XWPFDocument document = new XWPFDocument(docxStream);
+        StringBuilder textBuilder = new StringBuilder();
+        document.getParagraphs().forEach(paragraph -> textBuilder.append(paragraph.getText()).append("\n"));
+
+        // Render the entire document content to an image
+        images.add(renderTextToImage(textBuilder.toString()));
+        return images;
+    }
+
+    private static List<BufferedImage> convertHtmlToGrayImages(InputStream htmlStream) throws IOException {
+        List<BufferedImage> images = new ArrayList<>();
+        Document document = Jsoup.parse(htmlStream, "UTF-8", "");
+
+        Elements paragraphs = document.body().select("p");
+        for (Element paragraph : paragraphs) {
+            images.add(renderTextToImage(paragraph.text()));
+        }
+
+        return images;
     }
 
     private static void saveAsMultiPageTiff(List<BufferedImage> images, String tiffFilePath) throws IOException {
@@ -152,6 +199,7 @@ public class MsgToTiffConverter {
         compressionTypeName.setAttribute("value", "LZW");
         compression.appendChild(compressionTypeName);
         root.appendChild(compression);
+
         metadata.setFromTree(metaFormatName, root);
 
         return metadata;
