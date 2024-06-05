@@ -42,11 +42,11 @@ public class MsgToTiffConverter {
     public static void convertMsgToTiff(String msgFilePath, String tiffFilePath) throws Exception {
         // Extract email content and attachments
         MAPIMessage msg = new MAPIMessage(msgFilePath);
-        String emailContent = msg.getTextBody();
+        String emailContent = msg.getHtmlBody();  // Changed from getTextBody to getHtmlBody to preserve HTML formatting
         List<AttachmentChunks> attachments = List.of(msg.getAttachmentFiles());
 
         // Convert email content to an image with proper formatting
-        BufferedImage emailImage = renderTextToImage(emailContent);
+        BufferedImage emailImage = renderHtmlToImage(emailContent);
 
         // Convert attachments to images in grayscale
         List<BufferedImage> attachmentImages = new ArrayList<>();
