@@ -162,25 +162,36 @@ public class MsgToTiffConverter {
     }
 
 
-    private static List<BufferedImage> convertHtmlToGrayImages(InputStream htmlStream) throws IOException {
-        List<BufferedImage> images = new ArrayList<>();
-
-        // Read the HTML content from the InputStream
-        Document document = Jsoup.parse(htmlStream, "UTF-8", "");
-
-        // Replace problematic entities with their numeric equivalents
-        String htmlContent = document.html().replace("&nbsp;", "&#160;");
-
-        // Tidy up the HTML content
-        Document tidyDocument = Jsoup.parse(htmlContent);
-        tidyDocument.outputSettings().syntax(Document.OutputSettings.Syntax.xml);
-
-        // Render the HTML content to an image
-        BufferedImage image = renderHtmlToImage(tidyDocument.html());
-        images.add(image);
-
-        return images;
+   private static void logHtmlContent(String htmlContent) {
+    try (PrintWriter out = new PrintWriter("htmlContent.log")) {
+        out.println(htmlContent);
+    } catch (IOException e) {
+        e.printStackTrace();
     }
+}
+
+private static List<BufferedImage> convertHtmlToGrayImages(InputStream htmlStream) throws IOException {
+    List<BufferedImage> images = new ArrayList<>();
+
+    // Read the HTML content from the InputStream
+    Document document = Jsoup.parse(htmlStream, "UTF-8", "");
+
+    // Clean up and ensure proper closing of tags
+    document.outputSettings().syntax(Document.OutputSettings.Syntax.xml);
+    document.outputSettings().escapeMode(org.jsoup.nodes.Entities.EscapeMode.xhtml);
+
+    // Replace problematic entities with their numeric equivalents
+    String htmlContent = document.html().replace("&nbsp;", "&#160;");
+
+    // Log the cleaned HTML content for analysis
+    logHtmlContent(htmlContent);
+
+    // Render the HTML content to an image
+    BufferedImage image = renderHtmlToImage(htmlContent);
+    images.add(image);
+
+    return images;
+}
 
     private static BufferedImage renderHtmlToImage(String htmlContent) {
         // Create a temporary file to store the HTML content
