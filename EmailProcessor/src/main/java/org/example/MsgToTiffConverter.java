@@ -9,8 +9,12 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.xhtmlrenderer.swing.Java2DRenderer;
-
 import javax.imageio.*;
+
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
 import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.metadata.IIOMetadataNode;
 import javax.imageio.stream.ImageOutputStream;
@@ -138,6 +142,20 @@ public class MsgToTiffConverter {
             }
         }
     }
+
+    private static List<BufferedImage> convertPdfToGrayImages(InputStream pdfStream) throws IOException {
+        List<BufferedImage> images = new ArrayList<>();
+        PDDocument document = PDDocument.load(pdfStream);
+        PDFRenderer pdfRenderer = new PDFRenderer(document);
+
+        for (int page = 0; page < document.getNumberOfPages(); ++page) {
+            BufferedImage image = pdfRenderer.renderImageWithDPI(page, 300, ImageType.GRAY);
+            images.add(image);
+        }
+        document.close();
+        return images;
+    }
+
     private static List<BufferedImage> convertDocToGrayImages(InputStream docStream) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
         byte[] docBytes = inputStreamToByteArray(docStream);
@@ -159,16 +177,17 @@ public class MsgToTiffConverter {
         return images;
     }
 
-    private static List<BufferedImage> convertPdfToGrayImages(InputStream pdfStream) throws IOException {
+    private static List<BufferedImage> convertDocxToGrayImages(InputStream docxStream) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
-        PDDocument document = PDDocument.load(pdfStream);
-        PDFRenderer pdfRenderer = new PDFRenderer(document);
+        try (XWPFDocument document = new XWPFDocument(docxStream)) {
+            StringBuilder textBuilder = new StringBuilder();
+            document.getParagraphs().forEach(paragraph -> textBuilder.append(paragraph.getText()).append("\n"));
 
-        for (int page = 0; page < document.getNumberOfPages(); ++page) {
-            BufferedImage image = pdfRenderer.renderImageWithDPI(page, 300, ImageType.GRAY);
-            images.add(image);
+            // Render the entire document content to an image
+            images.add(renderTextToImage(textBuilder.toString()));
+        } catch (Exception e) {
+            System.out.println("Error processing DOCX file: " + e.getMessage());
         }
-        document.close();
         return images;
     }
 
@@ -210,19 +229,7 @@ public class MsgToTiffConverter {
         g2d.dispose();
         return image;
     }
-    private static List<BufferedImage> convertDocxToGrayImages(InputStream docxStream) throws IOException {
-        List<BufferedImage> images = new ArrayList<>();
-        try (XWPFDocument document = new XWPFDocument(docxStream)) {
-            StringBuilder textBuilder = new StringBuilder();
-            document.getParagraphs().forEach(paragraph -> textBuilder.append(paragraph.getText()).append("\n"));
 
-            // Render the entire document content to an image
-            images.add(renderTextToImage(textBuilder.toString()));
-        } catch (Exception e) {
-            System.out.println("Error processing DOCX file: " + e.getMessage());
-        }
-        return images;
-    }
     private static IIOMetadata getMetadata(ImageWriter writer, BufferedImage image) throws IOException {
         ImageWriteParam writeParam = writer.getDefaultWriteParam();
         ImageTypeSpecifier typeSpecifier = ImageTypeSpecifier.createFromBufferedImageType(image.getType());
@@ -232,7 +239,6 @@ public class MsgToTiffConverter {
         if (metadata.isReadOnly() || !metadata.isStandardMetadataFormatSupported()) {
             return metadata;
         }
-
         String metaFormatName = metadata.getNativeMetadataFormatName();
         IIOMetadataNode root = (IIOMetadataNode) metadata.getAsTree(metaFormatName);
         IIOMetadataNode compression = new IIOMetadataNode("Compression");
@@ -245,6 +251,7 @@ public class MsgToTiffConverter {
 
         return metadata;
     }
+
     private static byte[] inputStreamToByteArray(InputStream inputStream) throws IOException {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         int nRead;
