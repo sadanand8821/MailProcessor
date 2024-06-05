@@ -126,26 +126,31 @@ public class MsgToTiffConverter {
 
     private static List<BufferedImage> convertDocToGrayImages(InputStream docStream) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
-        HWPFDocument document = new HWPFDocument(docStream);
-        WordExtractor extractor = new WordExtractor(document);
-        String[] paragraphs = extractor.getParagraphText();
+        try (HWPFDocument document = new HWPFDocument(docStream)) {
+            WordExtractor extractor = new WordExtractor(document);
+            String[] paragraphs = extractor.getParagraphText();
 
-        // Render each paragraph to an image
-        for (String paragraph : paragraphs) {
-            images.add(renderTextToImage(paragraph));
+            // Render each paragraph to an image
+            for (String paragraph : paragraphs) {
+                images.add(renderTextToImage(paragraph));
+            }
+        } catch (Exception e) {
+            System.out.println("Error processing DOC file: " + e.getMessage());
         }
-
         return images;
     }
 
     private static List<BufferedImage> convertDocxToGrayImages(InputStream docxStream) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
-        XWPFDocument document = new XWPFDocument(docxStream);
-        StringBuilder textBuilder = new StringBuilder();
-        document.getParagraphs().forEach(paragraph -> textBuilder.append(paragraph.getText()).append("\n"));
+        try (XWPFDocument document = new XWPFDocument(docxStream)) {
+            StringBuilder textBuilder = new StringBuilder();
+            document.getParagraphs().forEach(paragraph -> textBuilder.append(paragraph.getText()).append("\n"));
 
-        // Render the entire document content to an image
-        images.add(renderTextToImage(textBuilder.toString()));
+            // Render the entire document content to an image
+            images.add(renderTextToImage(textBuilder.toString()));
+        } catch (Exception e) {
+            System.out.println("Error processing DOCX file: " + e.getMessage());
+        }
         return images;
     }
 
