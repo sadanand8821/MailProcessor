@@ -171,8 +171,12 @@ public class MsgToTiffConverter {
         // Replace problematic entities with their numeric equivalents
         String htmlContent = document.html().replace("&nbsp;", "&#160;");
 
+        // Tidy up the HTML content
+        Document tidyDocument = Jsoup.parse(htmlContent);
+        tidyDocument.outputSettings().syntax(Document.OutputSettings.Syntax.xml);
+
         // Render the HTML content to an image
-        BufferedImage image = renderHtmlToImage(htmlContent);
+        BufferedImage image = renderHtmlToImage(tidyDocument.html());
         images.add(image);
 
         return images;
