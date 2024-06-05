@@ -126,9 +126,12 @@ public class MsgToTiffConverter {
 
     private static List<BufferedImage> convertDocToGrayImages(InputStream docStream) throws IOException {
     List<BufferedImage> images = new ArrayList<>();
+    byte[] docBytes = inputStreamToByteArray(docStream);
+    ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(docBytes);
+
     try {
         // Attempt to read as a DOC file
-        HWPFDocument document = new HWPFDocument(docStream);
+        HWPFDocument document = new HWPFDocument(byteArrayInputStream);
         WordExtractor extractor = new WordExtractor(document);
         String[] paragraphs = extractor.getParagraphText();
 
@@ -140,11 +143,8 @@ public class MsgToTiffConverter {
     } catch (Exception e) {
         System.out.println("Error processing DOC file, attempting as RTF: " + e.getMessage());
         // If DOC processing fails, try reading as RTF
-        try {
-            images.addAll(convertRtfToGrayImages(new ByteArrayInputStream(((ByteArrayInputStream) docStream).toByteArray())));
-        } catch (Exception rtfException) {
-            System.out.println("Error processing as RTF file: " + rtfException.getMessage());
-        }
+        byteArrayInputStream = new ByteArrayInputStream(docBytes);
+        images.addAll(convertRtfToGrayImages(byteArrayInputStream));
     }
     return images;
 }
@@ -188,6 +188,16 @@ public class MsgToTiffConverter {
         System.out.println("Error processing RTF file: " + e.getMessage());
     }
     return images;
+}
+    private static byte[] inputStreamToByteArray(InputStream inputStream) throws IOException {
+    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+    int nRead;
+    byte[] data = new byte[16384];
+    while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+        buffer.write(data, 0, nRead);
+    }
+    buffer.flush();
+    return buffer.toByteArray();
 }
 
     private static void saveAsMultiPageTiff(List<BufferedImage> images, String tiffFilePath) throws IOException {
