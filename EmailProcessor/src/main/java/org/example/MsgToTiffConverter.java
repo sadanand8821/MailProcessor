@@ -110,6 +110,8 @@ private static int findWrapPosition(String line, FontMetrics fm, int maxLineWidt
     }
     return len;
 }
+
+    
     private static List<BufferedImage> convertPdfToGrayImages(InputStream pdfStream) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
         PDDocument document = PDDocument.load(pdfStream);
@@ -122,8 +124,11 @@ private static int findWrapPosition(String line, FontMetrics fm, int maxLineWidt
         document.close();
         return images;
     }
+    private static boolean isRtfContent(String content) {
+    return content.contains("{\\rtf");
+}
 
-    private static List<BufferedImage> convertDocToGrayImages(InputStream docStream) throws IOException {
+   private static List<BufferedImage> convertDocToGrayImages(InputStream docStream) throws IOException {
     List<BufferedImage> images = new ArrayList<>();
     byte[] docBytes = inputStreamToByteArray(docStream);
     
@@ -133,6 +138,14 @@ private static int findWrapPosition(String line, FontMetrics fm, int maxLineWidt
     // Optionally, print a portion of the byte array as a string to verify content
     String contentSnippet = new String(docBytes, 0, Math.min(docBytes.length, 1000));
     System.out.println("Input stream content snippet: " + contentSnippet);
+
+    // Check if the content contains RTF markers
+    if (isRtfContent(contentSnippet)) {
+        System.out.println("Detected RTF content.");
+        ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(docBytes);
+        images.addAll(convertRtfToGrayImages(byteArrayInputStream));
+        return images;
+    }
 
     ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(docBytes);
 
@@ -215,6 +228,8 @@ private static int findWrapPosition(String line, FontMetrics fm, int maxLineWidt
     }
     return images;
 }
+
+    
     private static byte[] inputStreamToByteArray(InputStream inputStream) throws IOException {
     ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     int nRead;
