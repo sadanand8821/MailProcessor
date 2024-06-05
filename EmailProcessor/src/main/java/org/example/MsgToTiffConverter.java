@@ -125,20 +125,29 @@ public class MsgToTiffConverter {
     }
 
     private static List<BufferedImage> convertDocToGrayImages(InputStream docStream) throws IOException {
-        List<BufferedImage> images = new ArrayList<>();
-        try (HWPFDocument document = new HWPFDocument(docStream)) {
-            WordExtractor extractor = new WordExtractor(document);
-            String[] paragraphs = extractor.getParagraphText();
+    List<BufferedImage> images = new ArrayList<>();
+    try {
+        // Attempt to read as a DOC file
+        HWPFDocument document = new HWPFDocument(docStream);
+        WordExtractor extractor = new WordExtractor(document);
+        String[] paragraphs = extractor.getParagraphText();
 
-            // Render each paragraph to an image
-            for (String paragraph : paragraphs) {
-                images.add(renderTextToImage(paragraph));
-            }
-        } catch (Exception e) {
-            System.out.println("Error processing DOC file: " + e.getMessage());
+        // Render each paragraph to an image
+        for (String paragraph : paragraphs) {
+            images.add(renderTextToImage(paragraph));
         }
-        return images;
+        document.close();
+    } catch (Exception e) {
+        System.out.println("Error processing DOC file, attempting as RTF: " + e.getMessage());
+        // If DOC processing fails, try reading as RTF
+        try {
+            images.addAll(convertRtfToGrayImages(new ByteArrayInputStream(((ByteArrayInputStream) docStream).toByteArray())));
+        } catch (Exception rtfException) {
+            System.out.println("Error processing as RTF file: " + rtfException.getMessage());
+        }
     }
+    return images;
+}
 
     private static List<BufferedImage> convertDocxToGrayImages(InputStream docxStream) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
@@ -165,6 +174,21 @@ public class MsgToTiffConverter {
 
         return images;
     }
+
+    private static List<BufferedImage> convertRtfToGrayImages(InputStream rtfStream) {
+    List<BufferedImage> images = new ArrayList<>();
+    try {
+        javax.swing.text.rtf.RTFEditorKit rtfParser = new javax.swing.text.rtf.RTFEditorKit();
+        javax.swing.text.Document rtfDoc = rtfParser.createDefaultDocument();
+        rtfParser.read(rtfStream, rtfDoc, 0);
+        String text = rtfDoc.getText(0, rtfDoc.getLength());
+
+        images.add(renderTextToImage(text));
+    } catch (Exception e) {
+        System.out.println("Error processing RTF file: " + e.getMessage());
+    }
+    return images;
+}
 
     private static void saveAsMultiPageTiff(List<BufferedImage> images, String tiffFilePath) throws IOException {
         ImageWriter writer = null;
