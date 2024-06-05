@@ -11,6 +11,9 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.xhtmlrenderer.simple.Graphics2DRenderer;
+import org.xhtmlrenderer.swing.Java2DRenderer;
+
 
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
@@ -40,7 +43,7 @@ public class MsgToTiffConverter {
         // Extract email content and attachments
         MAPIMessage msg = new MAPIMessage(msgFilePath);
         String emailContent = msg.getTextBody();
-        List<AttachmentChunks> attachments = msg.getAttachmentFiles();
+        List<AttachmentChunks> attachments = List.of(msg.getAttachmentFiles());
 
         // Convert email content to an image with proper formatting
         BufferedImage emailImage = renderTextToImage(emailContent);
@@ -48,9 +51,9 @@ public class MsgToTiffConverter {
         // Convert attachments to images in grayscale
         List<BufferedImage> attachmentImages = new ArrayList<>();
         for (AttachmentChunks attachment : attachments) {
-            String filename = attachment.attachLongFileName.getValue();
+            String filename = attachment.getAttachLongFileName().getValue();
             if (filename != null) {
-                InputStream attachmentStream = new ByteArrayInputStream(attachment.attachData.getValue());
+                InputStream attachmentStream = new ByteArrayInputStream(attachment.getAttachData().getValue());
                 if (filename.endsWith(".pdf")) {
                     attachmentImages.addAll(convertPdfToGrayImages(attachmentStream));
                 } else if (filename.endsWith(".doc")) {
@@ -146,31 +149,63 @@ public class MsgToTiffConverter {
 
     private static List<BufferedImage> convertDocxToGrayImages(InputStream docxStream) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
-        try {
-            XWPFDocument document = new XWPFDocument(docxStream);
-            List<XWPFParagraph> paragraphs = document.getParagraphs();
+        try (XWPFDocument document = new XWPFDocument(docxStream)) {
+            StringBuilder textBuilder = new StringBuilder();
+            document.getParagraphs().forEach(paragraph -> textBuilder.append(paragraph.getText()).append("\n"));
 
-            for (XWPFParagraph paragraph : paragraphs) {
-                System.out.println("DOCX Paragraph: " + paragraph.getText());
-                images.add(renderTextToImage(paragraph.getText()));
-            }
-            document.close();
+            // Render the entire document content to an image
+            images.add(renderTextToImage(textBuilder.toString()));
         } catch (Exception e) {
             System.out.println("Error processing DOCX file: " + e.getMessage());
         }
         return images;
     }
 
+
     private static List<BufferedImage> convertHtmlToGrayImages(InputStream htmlStream) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
+
+        // Read the HTML content from the InputStream
         Document document = Jsoup.parse(htmlStream, "UTF-8", "");
 
-        Elements paragraphs = document.body().select("p");
-        for (Element paragraph : paragraphs) {
-            images.add(renderTextToImage(paragraph.text()));
-        }
+        // Convert the Document to a String
+        String htmlContent = document.html();
+
+        // Render the HTML content to an image
+        BufferedImage image = renderHtmlToImage(htmlContent);
+        images.add(image);
 
         return images;
+    }
+
+    private static BufferedImage renderHtmlToImage(String htmlContent) {
+        // Create a temporary file to store the HTML content
+        File tempFile = null;
+        try {
+            tempFile = File.createTempFile("tempHtml", ".html");
+            FileWriter writer = new FileWriter(tempFile);
+            writer.write(htmlContent);
+            writer.close();
+
+            // Render the HTML content to an image
+            Java2DRenderer renderer = new Java2DRenderer(tempFile, 800, 1000);
+            BufferedImage img = renderer.getImage();
+
+            // Convert the image to grayscale
+            BufferedImage grayImage = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
+            Graphics g = grayImage.getGraphics();
+            g.drawImage(img, 0, 0, null);
+            g.dispose();
+
+            return grayImage;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        } finally {
+            if (tempFile != null && tempFile.exists()) {
+                tempFile.delete();
+            }
+        }
     }
 
     private static void saveAsMultiPageTiff(List<BufferedImage> images, String tiffFilePath) throws IOException {
