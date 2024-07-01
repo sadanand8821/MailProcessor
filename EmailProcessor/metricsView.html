@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Method Metrics</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #dddddd;
+            text-align: left;
+            padding: 8px;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+<h1>Method Metrics</h1>
+<div th:if="${metrics != null}">
+    <table>
+        <thead>
+        <tr>
+            <th>Method</th>
+            <th>Count</th>
+            <th>Total Time (ms)</th>
+            <th>Max Time (ms)</th>
+            <th>Mean Time (ms)</th>
+            <th>Active Tasks</th>
+            <th>Duration (ms)</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="entry : ${metrics.entrySet()}">
+            <td th:text="${entry.key}"></td>
+            <td th:text="${entry.value['count'] != null ? entry.value['count'] : 0}"></td>
+            <td th:text="${entry.value['totalTime'] != null ? entry.value['totalTime'] : 0}"></td>
+            <td th:text="${entry.value['maxTime'] != null ? entry.value['maxTime'] : 0}"></td>
+            <td th:text="${entry.value['meanTime'] != null ? entry.value['meanTime'] : 0}"></td>
+            <td th:text="${entry.value['activeTasks'] != null ? entry.value['activeTasks'] : 0}"></td>
+            <td th:text="${entry.value['duration'] != null ? entry.value['duration'] : 0}"></td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+</body>
+</html>
