@@ -234,6 +234,67 @@ public class Assignment {
         }
     }
 
+    import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.xssf.binary.XSSFBParser;
+import org.apache.poi.xssf.binary.XSSFBStylesTable;
+import org.apache.poi.xssf.eventusermodel.XSSFBReader;
+import org.apache.poi.xssf.eventusermodel.XSSFBStylesTable;
+import org.apache.poi.xssf.eventusermodel.XSSFBReader;
+import org.apache.poi.xssf.model.SharedStringsTable;
+import org.xml.sax.ContentHandler;
+import org.xml.sax.SAXException;
+import org.xml.sax.helpers.DefaultHandler;
+import org.xml.sax.helpers.XMLReaderFactory;
+import org.xml.sax.XMLReader;
+import org.xml.sax.InputSource;
+
+import java.io.FileInputStream;
+import java.io.InputStream;
+
+public class XLSBParserExample {
+    public static void main(String[] args) {
+        try (InputStream is = new FileInputStream("path/to/your/file.xlsb")) {
+            OPCPackage pkg = OPCPackage.open(is);
+            XSSFBReader reader = new XSSFBReader(pkg);
+
+            XSSFBStylesTable styles = reader.getXSSFBStylesTable();
+            SharedStringsTable sst = reader.getSharedStringsTable();
+
+            for (InputStream sheetStream : reader.getSheetsData()) {
+                printSheet(styles, sst, sheetStream);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void printSheet(XSSFBStylesTable styles, SharedStringsTable sst, InputStream sheetStream) {
+        try {
+            ContentHandler handler = new DefaultHandler() {
+                @Override
+                public void startElement(String uri, String localName, String qName, org.xml.sax.Attributes attributes) throws SAXException {
+                    if ("c".equals(qName)) {
+                        String cellReference = attributes.getValue("r");
+                        String cellValue = "";
+                        for (int i = 0; i < attributes.getLength(); i++) {
+                            if ("v".equals(attributes.getLocalName(i))) {
+                                cellValue = attributes.getValue(i);
+                            }
+                        }
+                        System.out.println(cellReference + " - " + cellValue);
+                    }
+                }
+            };
+
+            XMLReader parser = XMLReaderFactory.createXMLReader();
+            parser.setContentHandler(handler);
+            parser.parse(new InputSource(sheetStream));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
 
     public class AnagramCheck {
         public static boolean isAnagram(String str1, String str2) {
