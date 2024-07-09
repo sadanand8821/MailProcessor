@@ -1,3 +1,58 @@
+// Log to confirm the test script is running
+console.log("Test script running");
+
+// Get redirects array from collection variables
+let redirects = pm.collectionVariables.get("redirects") ? JSON.parse(pm.collectionVariables.get("redirects")) : [];
+console.log("Current redirects:", redirects);
+
+// Check if the response has a 'Location' header
+if (pm.response.headers.has('Location')) {
+    // Capture the Location header value
+    let locationHeader = pm.response.headers.get('Location');
+    console.log("Location header found:", locationHeader);
+
+    // Push the Location header value to the redirects array
+    redirects.push(locationHeader);
+    
+    // Update the collection variable with the new redirects array
+    pm.collectionVariables.set("redirects", JSON.stringify(redirects));
+    console.log("Updated redirects:", JSON.stringify(redirects));
+    
+    // Set the next request to run, which will use the new URL
+    postman.setNextRequest(pm.info.requestName);
+} else {
+    console.log("No Location header found in the response or final response received");
+    
+    // Clear redirects if this is the final response
+    pm.collectionVariables.unset("redirects");
+}
+
+// Check if the response code is 401
+if (pm.response.code === 401) {
+    // Log the URL of the last redirect
+    if (redirects.length > 0) {
+        let lastRedirectUrl = redirects[redirects.length - 1];
+        console.log("Last redirect URL that resulted in 401:", lastRedirectUrl);
+    } else {
+        console.log("No redirects captured that resulted in 401");
+    }
+}
+
+// Log the response code
+console.log("Response code:", pm.response.code);
+
+
+
+
+
+
+
+
+
+
+
+
+
 // Initialize redirects array if not already set
 if (!pm.collectionVariables.get("redirects")) {
     pm.collectionVariables.set("redirects", JSON.stringify([]));
