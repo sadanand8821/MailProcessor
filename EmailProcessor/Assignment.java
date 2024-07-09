@@ -65,6 +65,42 @@ if (pm.response.code >= 200 && pm.response.code < 300) {
         }
     }
 
+// Log to confirm the test script is running
+console.log("Test script running");
+
+// Initialize or get existing redirects array from environment variable
+let redirects = pm.environment.get("redirects") ? JSON.parse(pm.environment.get("redirects")) : [];
+console.log("Initial redirects:", redirects);
+
+// Check if the response has a 'Location' header
+if (pm.response.headers.has('Location')) {
+    // Push the Location header value to the redirects array
+    let locationHeader = pm.response.headers.get('Location');
+    console.log("Found Location header:", locationHeader);
+    
+    // Capture specific redirect pattern
+    if (locationHeader.includes('authorization.ping')) {
+        console.log("Specific redirect pattern found:", locationHeader);
+        pm.environment.set("specificRedirect", locationHeader);
+    }
+
+    redirects.push(locationHeader);
+    
+    // Update the environment variable with the new redirects array
+    pm.environment.set("redirects", JSON.stringify(redirects));
+    console.log("Updated redirects:", JSON.stringify(redirects));
+} else {
+    console.log("No Location header found in the response");
+}
+
+// Clear redirects after the final request if status code is in the range of 200-299
+if (pm.response.code >= 200 && pm.response.code < 300) {
+    console.log("Final response received, clearing redirects");
+    pm.environment.unset("redirects");
+} else {
+    console.log("Response code:", pm.response.code);
+}
+
     public class ComplexNumbers {
         public static class Complex {
             int real;
