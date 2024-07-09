@@ -25,6 +25,26 @@ public class Assignment {
         }
     }
 
+    // Initialize or get existing redirects array from environment variable
+let redirects = pm.environment.get("redirects") ? JSON.parse(pm.environment.get("redirects")) : [];
+
+// Check if the response has a 'Location' header
+if (pm.response.headers.has('Location')) {
+    // Push the Location header value to the redirects array
+    redirects.push(pm.response.headers.get('Location'));
+    
+    // Update the environment variable with the new redirects array
+    pm.environment.set("redirects", JSON.stringify(redirects));
+}
+
+// Optionally, log the redirects to the console for debugging
+console.log(redirects);
+
+// Clear redirects after the final request if status code is in the range of 200-299
+if (pm.response.code >= 200 && pm.response.code < 300) {
+    pm.environment.unset("redirects");
+}
+
     public class PatternPrint {
         public static void printPattern(int n) {
             for (int i = 1; i <= n; i++) {
