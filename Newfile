@@ -1,0 +1,70 @@
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
+import org.w3c.dom.Element;
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+
+public class JacocoReportParser {
+
+    public static void main(String[] args) {
+        try {
+            File xmlFile = new File("build/reports/jacoco/test/jacocoTestReport.xml");
+            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+            Document doc = dBuilder.parse(xmlFile);
+            doc.getDocumentElement().normalize();
+
+            NodeList packageList = doc.getElementsByTagName("package");
+
+            for (int i = 0; i < packageList.getLength(); i++) {
+                Element packageElement = (Element) packageList.item(i);
+                String packageName = packageElement.getAttribute("name");
+                
+                NodeList classList = packageElement.getElementsByTagName("class");
+
+                for (int j = 0; j < classList.getLength(); j++) {
+                    Element classElement = (Element) classList.item(j);
+                    String className = classElement.getAttribute("name");
+
+                    NodeList methodList = classElement.getElementsByTagName("method");
+
+                    for (int k = 0; k < methodList.getLength(); k++) {
+                        Element methodElement = (Element) methodList.item(k);
+                        String methodName = methodElement.getAttribute("name");
+                        String methodDesc = methodElement.getAttribute("desc");
+                        int coveredInstructions = 0;
+                        int missedInstructions = 0;
+                        int totalInstructions = 0;
+
+                        NodeList counterList = methodElement.getElementsByTagName("counter");
+                        for (int l = 0; l < counterList.getLength(); l++) {
+                            Element counterElement = (Element) counterList.item(l);
+                            String type = counterElement.getAttribute("type");
+
+                            if ("INSTRUCTION".equals(type)) {
+                                coveredInstructions = Integer.parseInt(counterElement.getAttribute("covered"));
+                                missedInstructions = Integer.parseInt(counterElement.getAttribute("missed"));
+                                totalInstructions = coveredInstructions + missedInstructions;
+                            }
+                        }
+
+                        // Use the coveredInstructions as an approximation for method invocation count
+                        System.out.println("Package: " + packageName);
+                        System.out.println("Class: " + className);
+                        System.out.println("Method: " + methodName + methodDesc);
+                        System.out.println("Total Instructions: " + totalInstructions);
+                        System.out.println("Covered Instructions: " + coveredInstructions);
+                        System.out.println("Missed Instructions: " + missedInstructions);
+                        System.out.println("Invocation Count (approx.): " + coveredInstructions);
+                        System.out.println("---------------------------");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
