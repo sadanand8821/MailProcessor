@@ -1,60 +1,31 @@
-import org.jacoco.core.analysis.Analyzer;
-import org.jacoco.core.analysis.CoverageBuilder;
-import org.jacoco.core.analysis.IClassCoverage;
-import org.jacoco.core.analysis.IMethodCoverage;
-import org.jacoco.core.data.ExecutionDataReader;
-import org.jacoco.core.data.ExecutionDataStore;
-import org.jacoco.core.data.SessionInfoStore;
+import pdfplumber
+import pandas as pd
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.Collection;
+# Open the PDF file
+pdf_path = "sample.pdf"  # Replace with the actual file path
+data = []
 
-public class JacocoExecParser {
-    public static void main(String[] args) {
-        try {
-            File execFile = new File("path/to/your/jacoco.exec");
-            File classFilesDirectory = new File("path/to/your/class/files");
+with pdfplumber.open(pdf_path) as pdf:
+    for page in pdf.pages:
+        # Extract the table as a list of rows
+        rows = page.extract_table()
+        
+        if rows:  # Check if the table exists on the page
+            for row in rows[1:]:  # Skip the header row
+                # Extract relevant columns
+                serial_number = row[0]  # Serial number (we'll ignore it)
+                date = row[1]           # Date
+                payer = row[2]          # Payer Name
+                amount = row[3]         # Amount with "Wire" text
+                 
+                # Clean up amount (remove 'Wire' and any following text like 'Requires repair')
+                amount_cleaned = amount.split(" ")[1] if " " in amount else amount
+                 
+                # Append the cleaned data
+                data.append({"Date": date, "Payer": payer, "Amount": amount_cleaned})
 
-            // Read the execution data file
-            FileInputStream fis = new FileInputStream(execFile);
-            ExecutionDataStore executionDataStore = new ExecutionDataStore();
-            SessionInfoStore sessionInfoStore = new SessionInfoStore();
-            ExecutionDataReader executionDataReader = new ExecutionDataReader(fis);
+# Convert to a DataFrame and save to CSV
+df = pd.DataFrame(data)
+df.to_csv("extracted_payments.csv", index=False)
 
-            executionDataReader.setExecutionDataVisitor(executionDataStore);
-            executionDataReader.setSessionInfoVisitor(sessionInfoStore);
-            while (executionDataReader.read()) {}
-
-            fis.close();
-
-            // Analyze the execution data
-            CoverageBuilder coverageBuilder = new CoverageBuilder();
-            Analyzer analyzer = new Analyzer(executionDataStore, coverageBuilder);
-
-            // Provide the directory containing the class files
-            analyzer.analyzeAll(classFilesDirectory);
-
-            // Print method invocation counts
-            for (IClassCoverage classCoverage : coverageBuilder.getClasses()) {
-                String className = classCoverage.getName().replace('/', '.');
-
-                Collection<IMethodCoverage> methods = classCoverage.getMethods();
-                for (IMethodCoverage methodCoverage : methods) {
-                    String methodName = methodCoverage.getName();
-                    String methodDesc = methodCoverage.getDesc();
-
-                    int invocationCount = methodCoverage.getInstructionCounter().getCoveredCount();
-
-                    System.out.println("Class: " + className);
-                    System.out.println("Method: " + methodName + methodDesc);
-                    System.out.println("Invocation Count: " + invocationCount);
-                    System.out.println("---------------------------");
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-}
+print(df)
