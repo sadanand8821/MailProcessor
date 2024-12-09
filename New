@@ -1,48 +1,22 @@
-import pdfplumber
-import pandas as pd
-
-# Open the PDF file
-pdf_path = "sample.pdf"  # Replace with your actual file path
-data = []
-
-with pdfplumber.open(pdf_path) as pdf:
-    for page in pdf.pages:
-        # Extract the table as a list of rows
-        rows = page.extract_table()
-
-        if rows:  # Check if the table exists on the page
-            for row in rows[1:]:  # Skip the header row
-                # Extract relevant columns (raw data from the PDF)
-                try:
-                    raw_text = " ".join(row)  # Combine row elements into one string for parsing
-
-                    # Split the row text into sections
-                    parts = raw_text.split("Wire")  # Split at "Wire" to separate metadata and amount details
-                    
-                    if len(parts) == 2:
-                        # Extract metadata (serial number, date, and payer)
-                        meta_part = parts[0].strip()
-                        payment_part = parts[1].strip()
-
-                        # Split metadata into components
-                        meta_parts = meta_part.split(" ", 2)  # Split into serial, date, and payer
-                        serial = meta_parts[0]
-                        date = meta_parts[1]
-                        payer = meta_parts[2]
-
-                        # Extract and clean the amount (remove "USD" and trailing text)
-                        amount = payment_part.split("USD")[0].strip()
-
-                        # Append the structured data
-                        data.append({"Serial": serial, "Date": date, "Payer": payer, "Amount": amount})
-                except Exception as e:
-                    print(f"Error parsing row: {row}. Error: {e}")
-
-# Convert to DataFrame
-df = pd.DataFrame(data)
-
-# Save the cleaned data to a CSV file
-df.to_csv("payments_cleaned.csv", index=False)
-
-# Print the DataFrame
-print(df)
+Sub FillMissingSerials()
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim i As Long, expectedValue As Long
+    
+    ' Set the worksheet
+    Set ws = ThisWorkbook.Sheets("payments_cleaned") ' Change to your sheet name
+    
+    ' Find the last row in the Serial column
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Loop through rows to check for missing serials
+    expectedValue = 1
+    For i = 2 To lastRow
+        If ws.Cells(i, 1).Value <> expectedValue Then
+            ' Insert a row
+            ws.Rows(i).Insert
+            ws.Cells(i, 1).Value = expectedValue
+        End If
+        expectedValue = expectedValue + 1
+    Next i
+End Sub
