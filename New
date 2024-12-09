@@ -2,21 +2,27 @@ Sub FillMissingSerials()
     Dim ws As Worksheet
     Dim lastRow As Long
     Dim i As Long, expectedValue As Long
-    
+
     ' Set the worksheet
-    Set ws = ThisWorkbook.Sheets("payments_cleaned") ' Change to your sheet name
-    
+    Set ws = ThisWorkbook.Sheets("payments_cleaned") ' Change this to your actual sheet name
+
     ' Find the last row in the Serial column
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-    
+
+    ' Start with the first expected value
+    expectedValue = ws.Cells(2, 1).Value ' Assuming the serial starts in cell A2
+
     ' Loop through rows to check for missing serials
-    expectedValue = 1
     For i = 2 To lastRow
-        If ws.Cells(i, 1).Value <> expectedValue Then
-            ' Insert a row
+        Do While ws.Cells(i, 1).Value > expectedValue
+            ' Insert a row for the missing serial
             ws.Rows(i).Insert
             ws.Cells(i, 1).Value = expectedValue
-        End If
-        expectedValue = expectedValue + 1
+            ws.Cells(i, 2).Value = "" ' Optional: Clear the Date column
+            ws.Cells(i, 3).Value = "" ' Optional: Clear the Payer column
+            expectedValue = expectedValue + 1
+            lastRow = lastRow + 1 ' Update lastRow to account for the new row
+        Loop
+        expectedValue = ws.Cells(i, 1).Value + 1
     Next i
 End Sub
