@@ -1,17 +1,29 @@
 public class ExcelReader {
-    public static List<String> readRepoURLs(String excelPath) throws IOException {
-        List<String> repoUrls = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(excelPath)) {
-            Workbook wb = new XSSFWorkbook(fis);
+    public static List<RepoInfo> readRepoData(String excelPath) throws IOException {
+        List<RepoInfo> repoDataList = new ArrayList<>();
+        try (FileInputStream fis = new FileInputStream(excelPath);
+             Workbook wb = new XSSFWorkbook(fis)) {
             Sheet sheet = wb.getSheetAt(0);
             for (Row row : sheet) {
-                Cell cell = row.getCell(0);
-                if (cell != null) {
-                    repoUrls.add(cell.getStringCellValue().trim());
+                if (row.getRowNum() == 0) {
+                    // Assuming first row is header, skip if needed
+                    continue;
+                }
+
+                Cell urlCell = row.getCell(0);
+                Cell branchCell = row.getCell(1);
+
+                if (urlCell != null && branchCell != null) {
+                    String repoUrl = urlCell.getStringCellValue().trim();
+                    String branch = branchCell.getStringCellValue().trim();
+
+                    if (!repoUrl.isEmpty() && !branch.isEmpty()) {
+                        repoDataList.add(new RepoInfo(repoUrl, branch));
+                    }
                 }
             }
         }
-        return repoUrls;
+        return repoDataList;
     }
     
     public static Map<String, Set<String>> readDevMap(String excelPath) throws IOException {
