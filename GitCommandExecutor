@@ -1,0 +1,22 @@
+public class GitCommandExecutor {
+    public static List<String> runGitCommand(File workingDir, List<String> command) throws IOException, InterruptedException {
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.directory(workingDir);
+        Process process = pb.start();
+        
+        List<String> output = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while((line = reader.readLine()) != null) {
+                output.add(line);
+            }
+        }
+        
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            // Handle error: maybe read error stream as well
+        }
+        
+        return output;
+    }
+}
