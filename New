@@ -16,47 +16,58 @@ public class Main {
                 }
             }
 
-            // Read repository URLs
+            System.out.println("DEBUG: Reading repo URLs...");
             List<String> repoUrls = ExcelReader.readRepoURLs("RepoURLs.xlsx");
+            System.out.println("DEBUG: Repo URLs: " + repoUrls);
 
-            // Read developer UID to alias mapping
+            System.out.println("DEBUG: Reading Dev Map...");
             Map<String, Set<String>> devMap = ExcelReader.readDevMap("DevMap.xlsx");
+            System.out.println("DEBUG: Dev Map: " + devMap);
 
-            // Parameters for filtering commits
             String branch = "main";
             String afterDate = "2021-01-01";
             String beforeDate = "2021-12-31";
 
-            // Maps to store commit counts
             Map<String, Integer> globalAuthorCounts = new HashMap<>();
 
-            // Process each repo
             for (String repoUrl : repoUrls) {
                 String repoName = extractRepoName(repoUrl);
 
-                // Clone the repo
+                System.out.println("DEBUG: About to clone repo: " + repoUrl + " into " + repoName);
                 cloneRepository(baseDir, repoUrl, repoName);
 
+                // Check if the directory was created
                 File repoFolder = new File(baseDir, repoName);
+                if (!repoFolder.exists()) {
+                    System.err.println("ERROR: Repo folder not created. Something is wrong with the clone step.");
+                    continue;
+                } else {
+                    System.out.println("DEBUG: Repo folder exists: " + repoFolder.getAbsolutePath());
+                }
 
-                // Run git shortlog command
+                // Run shortlog command
+                System.out.println("DEBUG: Running shortlog on " + repoName);
                 List<String> shortlogOutput = runShortlog(repoFolder, branch, afterDate, beforeDate);
 
-                // Parse the shortlog output and update global counts
+                // Check if we got any output
+                if (shortlogOutput.isEmpty()) {
+                    System.out.println("DEBUG: Shortlog output is empty. Either no commits or command failed silently.");
+                }
+
                 parseShortlogOutput(shortlogOutput, globalAuthorCounts);
 
-                // Clean up (delete the cloned repo)
+                System.out.println("DEBUG: Done processing " + repoUrl + ". Deleting repo folder...");
                 deleteDirectory(repoFolder);
             }
 
-            // Normalize authors using devMap
+            System.out.println("DEBUG: Normalizing authors...");
             Map<String, Integer> finalUidCounts = normalizeAuthors(globalAuthorCounts, devMap);
 
-            // Write results to Excel
             File outputFile = new File(baseDir, "CommitCounts.xlsx");
+            System.out.println("DEBUG: Writing results to " + outputFile.getAbsolutePath());
             ExcelWriter.writeResults(finalUidCounts, outputFile);
 
-            System.out.println("Done. Results written to " + outputFile.getAbsolutePath());
+            System.out.println("DEBUG: Process complete. Check CommitCounts.xlsx for results.");
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -77,20 +88,18 @@ public class Main {
     }
 
     private static List<String> runShortlog(File repoFolder, String branch, String afterDate, String beforeDate) throws IOException, InterruptedException {
-        List<String> shortlogCmd = new ArrayList<>(Arrays.asList(
+        List<String> shortlogCmd = Arrays.asList(
             "git", "shortlog", "-s", "-n", "-e", branch,
             "--after=" + afterDate,
             "--before=" + beforeDate
-        ));
+        );
         return GitCommandExecutor.runGitCommand(repoFolder, shortlogCmd);
     }
 
     private static void parseShortlogOutput(List<String> lines, Map<String, Integer> counts) {
-        // Each line might look like: "   10    John Doe <john.doe@example.com>"
         for (String line : lines) {
             String trimmed = line.trim();
             if (trimmed.isEmpty()) continue;
-            // Find first space after numbers
             int spaceIndex = indexOfFirstNonDigit(trimmed);
             if (spaceIndex == -1) continue;
             String countStr = trimmed.substring(0, spaceIndex).trim();
@@ -99,7 +108,7 @@ public class Main {
                 int commitCount = Integer.parseInt(countStr);
                 counts.put(author, counts.getOrDefault(author, 0) + commitCount);
             } catch (NumberFormatException e) {
-                // In case parsing fails, skip that line
+                System.err.println("DEBUG: Failed to parse commit count: " + countStr + " from line: " + line);
             }
         }
     }
@@ -137,6 +146,9 @@ public class Main {
                 }
             }
         }
-        dir.delete();
+        boolean deleted = dir.delete();
+        if (!deleted) {
+            System.err.println("DEBUG: Failed to delete " + dir.getAbsolutePath());
+        }
     }
 }
