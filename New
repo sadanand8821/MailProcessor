@@ -1,28 +1,46 @@
-Sub FillMissingSerials()
-    Dim ws As Worksheet
-    Dim lastRow As Long
-    Dim i As Long, expectedValue As Long
+// Global maps
+Map<String, Integer> globalAuthorCounts = new HashMap<>();
 
-    ' Set the worksheet
-    Set ws = ThisWorkbook.Sheets("payments_cleaned") ' Change this to your actual sheet name
+public static void main(String[] args) throws Exception {
+    String baseDir = "Code Commit Counts";
+    File baseFolder = new File(baseDir);
+    if (!baseFolder.exists()) baseFolder.mkdir();
 
-    ' Find the last row in the Serial column
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    List<String> repoUrls = ExcelReader.readRepoURLs("RepoURLs.xlsx");
+    Map<String, Set<String>> devMap = ExcelReader.readDevMap("DevMap.xlsx");
+    
+    String branch = "main"; // can read from config
+    String afterDate = "2021-01-01";
+    String beforeDate = "2021-12-31";
 
-    ' Start with the first expected value
-    expectedValue = ws.Cells(2, 1).Value ' Assuming the serial starts in cell A2
+    for (String repoUrl : repoUrls) {
+        // Extract repo name from URL as folder name
+        String repoName = extractRepoName(repoUrl);
+        File repoFolder = new File(baseFolder, repoName);
 
-    ' Loop through rows to check for missing serials
-    For i = 2 To lastRow
-        Do While ws.Cells(i, 1).Value > expectedValue
-            ' Insert a row for the missing serial
-            ws.Rows(i).Insert
-            ws.Cells(i, 1).Value = expectedValue
-            ws.Cells(i, 2).Value = "" ' Optional: Clear the Date column
-            ws.Cells(i, 3).Value = "" ' Optional: Clear the Payer column
-            expectedValue = expectedValue + 1
-            lastRow = lastRow + 1 ' Update lastRow to account for the new row
-        Loop
-        expectedValue = ws.Cells(i, 1).Value + 1
-    Next i
-End Sub
+        // Clone the repo
+        List<String> cloneCmd = Arrays.asList("git", "clone", repoUrl, repoName);
+        GitCommandExecutor.runGitCommand(baseFolder, cloneCmd);
+
+        // Now run shortlog or log inside repoFolder
+        // Example using shortlog:
+        List<String> shortlogCmd = Arrays.asList(
+            "git", "shortlog", "-s", "-n", "-e", branch,
+            "--after=" + afterDate,
+            "--before=" + beforeDate
+        );
+        List<String> shortlogOutput = GitCommandExecutor.runGitCommand(repoFolder, shortlogCmd);
+
+        // Parse shortlog output and update globalAuthorCounts
+        parseShortlogOutput(shortlogOutput, globalAuthorCounts);
+
+        // Clean up by deleting the repo folder if desired
+        deleteDirectory(repoFolder);
+    }
+
+    // Normalize authors using devMap and create final UID map
+    Map<String, Integer> finalUidCounts = normalizeAuthors(globalAuthorCounts, devMap);
+
+    // Write output to Excel
+    ExcelWriter.writeResults(finalUidCounts, new File(baseDir, "CommitCounts.xlsx"));
+}
