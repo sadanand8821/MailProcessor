@@ -1,0 +1,19 @@
+package com.example;
+
+public class RepoInfo {
+    private final String repoUrl;
+    private final String branch;
+
+    public RepoInfo(String repoUrl, String branch) {
+        this.repoUrl = repoUrl;
+        this.branch = branch;
+    }
+
+    public String getRepoUrl() {
+        return repoUrl;
+    }
+
+    public String getBranch() {
+        return branch;
+    }
+}
