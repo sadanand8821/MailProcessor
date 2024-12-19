@@ -1,46 +1,142 @@
-// Global maps
-Map<String, Integer> globalAuthorCounts = new HashMap<>();
+package com.example;
 
-public static void main(String[] args) throws Exception {
-    String baseDir = "Code Commit Counts";
-    File baseFolder = new File(baseDir);
-    if (!baseFolder.exists()) baseFolder.mkdir();
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
 
-    List<String> repoUrls = ExcelReader.readRepoURLs("RepoURLs.xlsx");
-    Map<String, Set<String>> devMap = ExcelReader.readDevMap("DevMap.xlsx");
-    
-    String branch = "main"; // can read from config
-    String afterDate = "2021-01-01";
-    String beforeDate = "2021-12-31";
+public class Main {
+    public static void main(String[] args) {
+        try {
+            String baseDirName = "Code Commit Counts";
+            File baseDir = new File(baseDirName);
+            if (!baseDir.exists()) {
+                if (!baseDir.mkdir()) {
+                    System.err.println("Failed to create base directory: " + baseDirName);
+                    return;
+                }
+            }
 
-    for (String repoUrl : repoUrls) {
-        // Extract repo name from URL as folder name
-        String repoName = extractRepoName(repoUrl);
-        File repoFolder = new File(baseFolder, repoName);
+            // Read repository URLs
+            List<String> repoUrls = ExcelReader.readRepoURLs("RepoURLs.xlsx");
 
-        // Clone the repo
+            // Read developer UID to alias mapping
+            Map<String, Set<String>> devMap = ExcelReader.readDevMap("DevMap.xlsx");
+
+            // Parameters for filtering commits
+            String branch = "main";
+            String afterDate = "2021-01-01";
+            String beforeDate = "2021-12-31";
+
+            // Maps to store commit counts
+            Map<String, Integer> globalAuthorCounts = new HashMap<>();
+
+            // Process each repo
+            for (String repoUrl : repoUrls) {
+                String repoName = extractRepoName(repoUrl);
+
+                // Clone the repo
+                cloneRepository(baseDir, repoUrl, repoName);
+
+                File repoFolder = new File(baseDir, repoName);
+
+                // Run git shortlog command
+                List<String> shortlogOutput = runShortlog(repoFolder, branch, afterDate, beforeDate);
+
+                // Parse the shortlog output and update global counts
+                parseShortlogOutput(shortlogOutput, globalAuthorCounts);
+
+                // Clean up (delete the cloned repo)
+                deleteDirectory(repoFolder);
+            }
+
+            // Normalize authors using devMap
+            Map<String, Integer> finalUidCounts = normalizeAuthors(globalAuthorCounts, devMap);
+
+            // Write results to Excel
+            File outputFile = new File(baseDir, "CommitCounts.xlsx");
+            ExcelWriter.writeResults(finalUidCounts, outputFile);
+
+            System.out.println("Done. Results written to " + outputFile.getAbsolutePath());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static String extractRepoName(String repoUrl) {
+        String name = repoUrl.substring(repoUrl.lastIndexOf('/') + 1);
+        if (name.endsWith(".git")) {
+            name = name.substring(0, name.length() - 4);
+        }
+        return name;
+    }
+
+    private static void cloneRepository(File baseDir, String repoUrl, String repoName) throws IOException, InterruptedException {
         List<String> cloneCmd = Arrays.asList("git", "clone", repoUrl, repoName);
-        GitCommandExecutor.runGitCommand(baseFolder, cloneCmd);
+        GitCommandExecutor.runGitCommand(baseDir, cloneCmd);
+    }
 
-        // Now run shortlog or log inside repoFolder
-        // Example using shortlog:
-        List<String> shortlogCmd = Arrays.asList(
+    private static List<String> runShortlog(File repoFolder, String branch, String afterDate, String beforeDate) throws IOException, InterruptedException {
+        List<String> shortlogCmd = new ArrayList<>(Arrays.asList(
             "git", "shortlog", "-s", "-n", "-e", branch,
             "--after=" + afterDate,
             "--before=" + beforeDate
-        );
-        List<String> shortlogOutput = GitCommandExecutor.runGitCommand(repoFolder, shortlogCmd);
-
-        // Parse shortlog output and update globalAuthorCounts
-        parseShortlogOutput(shortlogOutput, globalAuthorCounts);
-
-        // Clean up by deleting the repo folder if desired
-        deleteDirectory(repoFolder);
+        ));
+        return GitCommandExecutor.runGitCommand(repoFolder, shortlogCmd);
     }
 
-    // Normalize authors using devMap and create final UID map
-    Map<String, Integer> finalUidCounts = normalizeAuthors(globalAuthorCounts, devMap);
+    private static void parseShortlogOutput(List<String> lines, Map<String, Integer> counts) {
+        // Each line might look like: "   10    John Doe <john.doe@example.com>"
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) continue;
+            // Find first space after numbers
+            int spaceIndex = indexOfFirstNonDigit(trimmed);
+            if (spaceIndex == -1) continue;
+            String countStr = trimmed.substring(0, spaceIndex).trim();
+            String author = trimmed.substring(spaceIndex).trim();
+            try {
+                int commitCount = Integer.parseInt(countStr);
+                counts.put(author, counts.getOrDefault(author, 0) + commitCount);
+            } catch (NumberFormatException e) {
+                // In case parsing fails, skip that line
+            }
+        }
+    }
 
-    // Write output to Excel
-    ExcelWriter.writeResults(finalUidCounts, new File(baseDir, "CommitCounts.xlsx"));
+    private static int indexOfFirstNonDigit(String str) {
+        for (int i = 0; i < str.length(); i++) {
+            if (!Character.isDigit(str.charAt(i))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static Map<String, Integer> normalizeAuthors(Map<String, Integer> authorCounts, Map<String, Set<String>> devMap) {
+        Map<String, Integer> finalUidCounts = new HashMap<>();
+        for (Map.Entry<String, Set<String>> entry : devMap.entrySet()) {
+            String uid = entry.getKey();
+            Set<String> aliases = entry.getValue();
+            int total = 0;
+            for (String alias : aliases) {
+                total += authorCounts.getOrDefault(alias, 0);
+            }
+            finalUidCounts.put(uid, total);
+        }
+        return finalUidCounts;
+    }
+
+    private static void deleteDirectory(File dir) {
+        if (!dir.exists()) return;
+        if (dir.isDirectory()) {
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    deleteDirectory(f);
+                }
+            }
+        }
+        dir.delete();
+    }
 }
