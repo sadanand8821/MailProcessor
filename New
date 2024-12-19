@@ -16,47 +16,57 @@ public class Main {
                 }
             }
 
-            System.out.println("DEBUG: Reading repo URLs...");
-            List<String> repoUrls = ExcelReader.readRepoURLs("RepoURLs.xlsx");
-            System.out.println("DEBUG: Repo URLs: " + repoUrls);
+            // Now read both Repo URL and Branch from Excel
+            List<RepoInfo> repoDataList = ExcelReader.readRepoData("RepoURLs.xlsx");
+            System.out.println("DEBUG: Repo Data: ");
+            for (RepoInfo info : repoDataList) {
+                System.out.println("URL: " + info.getRepoUrl() + ", Branch: " + info.getBranch());
+            }
 
-            System.out.println("DEBUG: Reading Dev Map...");
+            // Read the dev map as before
             Map<String, Set<String>> devMap = ExcelReader.readDevMap("DevMap.xlsx");
-            System.out.println("DEBUG: Dev Map: " + devMap);
 
-            String branch = "main";
-            String afterDate = "2021-01-01";
-            String beforeDate = "2021-12-31";
+            // Date range can remain hardcoded or configurable
+            String afterDate = "2022-01-01";
+            String beforeDate = "2022-12-31";
 
             Map<String, Integer> globalAuthorCounts = new HashMap<>();
 
-            for (String repoUrl : repoUrls) {
+            // Process each repo with its specified branch
+            for (RepoInfo info : repoDataList) {
+                String repoUrl = info.getRepoUrl();
+                String branch = info.getBranch();
+
                 String repoName = extractRepoName(repoUrl);
 
                 System.out.println("DEBUG: About to clone repo: " + repoUrl + " into " + repoName);
                 cloneRepository(baseDir, repoUrl, repoName);
 
-                // Check if the directory was created
                 File repoFolder = new File(baseDir, repoName);
                 if (!repoFolder.exists()) {
-                    System.err.println("ERROR: Repo folder not created. Something is wrong with the clone step.");
+                    System.err.println("ERROR: Repo folder not created. Check git clone step.");
                     continue;
                 } else {
                     System.out.println("DEBUG: Repo folder exists: " + repoFolder.getAbsolutePath());
                 }
 
-                // Run shortlog command
-                System.out.println("DEBUG: Running shortlog on " + repoName);
+                System.out.println("DEBUG: Running shortlog on repo: " + repoName + " with branch: " + branch);
                 List<String> shortlogOutput = runShortlog(repoFolder, branch, afterDate, beforeDate);
 
-                // Check if we got any output
-                if (shortlogOutput.isEmpty()) {
-                    System.out.println("DEBUG: Shortlog output is empty. Either no commits or command failed silently.");
+                // Print shortlog output for debugging
+                System.out.println("DEBUG: Shortlog output:");
+                for (String line : shortlogOutput) {
+                    System.out.println(line);
                 }
 
                 parseShortlogOutput(shortlogOutput, globalAuthorCounts);
 
-                System.out.println("DEBUG: Done processing " + repoUrl + ". Deleting repo folder...");
+                System.out.println("DEBUG: Updated globalAuthorCounts after " + repoUrl + ":");
+                for (Map.Entry<String, Integer> e : globalAuthorCounts.entrySet()) {
+                    System.out.println(e.getKey() + " => " + e.getValue());
+                }
+
+                System.out.println("DEBUG: Deleting repo folder " + repoFolder.getAbsolutePath());
                 deleteDirectory(repoFolder);
             }
 
@@ -89,7 +99,8 @@ public class Main {
 
     private static List<String> runShortlog(File repoFolder, String branch, String afterDate, String beforeDate) throws IOException, InterruptedException {
         List<String> shortlogCmd = Arrays.asList(
-            "git", "shortlog", "-s", "-n", "-e", branch,
+            "git", "shortlog", "-s", "-n", "-e", 
+            branch,
             "--after=" + afterDate,
             "--before=" + beforeDate
         );
@@ -124,14 +135,19 @@ public class Main {
 
     private static Map<String, Integer> normalizeAuthors(Map<String, Integer> authorCounts, Map<String, Set<String>> devMap) {
         Map<String, Integer> finalUidCounts = new HashMap<>();
-        for (Map.Entry<String, Set<String>> entry : devMap.entrySet()) {
-            String uid = entry.getKey();
-            Set<String> aliases = entry.getValue();
-            int total = 0;
-            for (String alias : aliases) {
-                total += authorCounts.getOrDefault(alias, 0);
+        if (devMap != null) {
+            for (Map.Entry<String, Set<String>> entry : devMap.entrySet()) {
+                String uid = entry.getKey();
+                Set<String> aliases = entry.getValue();
+                int total = 0;
+                for (String alias : aliases) {
+                    total += authorCounts.getOrDefault(alias, 0);
+                }
+                finalUidCounts.put(uid, total);
             }
-            finalUidCounts.put(uid, total);
+        } else {
+            // If devMap is null or not read
+            System.err.println("No dev map found. The final output will be empty.");
         }
         return finalUidCounts;
     }
