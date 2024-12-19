@@ -1,0 +1,31 @@
+package com.example;
+
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.Map;
+
+public class ExcelWriter {
+    public static void writeResults(Map<String, Integer> finalUidCounts, java.io.File outputFile) throws IOException {
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Commit Counts");
+            // Header
+            Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("UID");
+            header.createCell(1).setCellValue("Total Commits");
+
+            int rowIndex = 1;
+            for (Map.Entry<String, Integer> entry : finalUidCounts.entrySet()) {
+                Row row = sheet.createRow(rowIndex++);
+                row.createCell(0).setCellValue(entry.getKey());
+                row.createCell(1).setCellValue(entry.getValue());
+            }
+
+            try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+                wb.write(fos);
+            }
+        }
+    }
+}
