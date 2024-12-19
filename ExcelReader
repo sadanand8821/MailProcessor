@@ -1,0 +1,41 @@
+public class ExcelReader {
+    public static List<String> readRepoURLs(String excelPath) throws IOException {
+        List<String> repoUrls = new ArrayList<>();
+        try (FileInputStream fis = new FileInputStream(excelPath)) {
+            Workbook wb = new XSSFWorkbook(fis);
+            Sheet sheet = wb.getSheetAt(0);
+            for (Row row : sheet) {
+                Cell cell = row.getCell(0);
+                if (cell != null) {
+                    repoUrls.add(cell.getStringCellValue().trim());
+                }
+            }
+        }
+        return repoUrls;
+    }
+    
+    public static Map<String, Set<String>> readDevMap(String excelPath) throws IOException {
+        // Assuming:
+        // Row format: UID | AuthorName1 | AuthorName2 | ...
+        Map<String, Set<String>> devMap = new HashMap<>();
+        
+        try (FileInputStream fis = new FileInputStream(excelPath)) {
+            Workbook wb = new XSSFWorkbook(fis);
+            Sheet sheet = wb.getSheetAt(0);
+            for (Row row : sheet) {
+                Cell uidCell = row.getCell(0);
+                if (uidCell == null) continue;
+                String uid = uidCell.getStringCellValue().trim();
+                Set<String> aliases = new HashSet<>();
+                for (int i = 1; i < row.getLastCellNum(); i++) {
+                    Cell aliasCell = row.getCell(i);
+                    if (aliasCell != null) {
+                        aliases.add(aliasCell.getStringCellValue().trim());
+                    }
+                }
+                devMap.put(uid, aliases);
+            }
+        }
+        return devMap;
+    }
+}
