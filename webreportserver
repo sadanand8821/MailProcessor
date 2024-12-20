@@ -237,32 +237,50 @@ public class WebReportServer {
     }
 
     private static Map<String, Integer> normalizeAuthors(Map<String, Integer> authorCounts, Map<String, DevInfo> devMap) {
-    // If no devMap is provided, just return authorCounts unchanged.
+    // If no devMap is provided, return authorCounts as is
     if (devMap == null) {
         return new HashMap<>(authorCounts);
     }
 
+    // Make a copy of authorCounts so we can remove entries as we match them
+    Map<String, Integer> tempAuthorCounts = new HashMap<>(authorCounts);
     Map<String, Integer> finalUidCounts = new HashMap<>();
+
+    // Process each UID in devMap
     for (Map.Entry<String, DevInfo> entry : devMap.entrySet()) {
         String uid = entry.getKey();
         DevInfo info = entry.getValue();
 
-        // Collect all possible keys that could appear in authorCounts:
-        // UID itself, the Name, and all Aliases
+        // All possible keys that might represent this user in authorCounts
         Set<String> possibleKeys = new HashSet<>();
-        possibleKeys.add(uid); // in case the shortlog used UID as author
+        possibleKeys.add(uid); // UID itself
         String name = info.getName().trim();
         if (!name.isEmpty()) {
-            possibleKeys.add(name); // in case the shortlog used Name as author
+            possibleKeys.add(name); // Name
         }
-        possibleKeys.addAll(info.getAliases()); // in case the shortlog used any alias
+        possibleKeys.addAll(info.getAliases()); // All aliases
 
         int total = 0;
+        // Sum up all counts for these keys
         for (String key : possibleKeys) {
-            total += authorCounts.getOrDefault(key, 0);
+            if (tempAuthorCounts.containsKey(key)) {
+                total += tempAuthorCounts.get(key);
+                // Remove the matched author from temp map so we know it's accounted for
+                tempAuthorCounts.remove(key);
+            }
         }
 
         finalUidCounts.put(uid, total);
+    }
+
+    // Now, any remaining entries in tempAuthorCounts are authors not found in devMap
+    // We should still include them, as user requested that they be considered as well.
+    // They remain keyed by their original author string.
+    for (Map.Entry<String, Integer> e : tempAuthorCounts.entrySet()) {
+        // For authors not in devMap, we can use their original key as the "UID"
+        // and their "Name" will just be the same since we have no mapping.
+        // This ensures no author counts are lost.
+        finalUidCounts.put(e.getKey(), e.getValue());
     }
 
     return finalUidCounts;
