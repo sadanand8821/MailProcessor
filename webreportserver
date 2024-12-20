@@ -35,8 +35,9 @@ public class WebReportServer {
                 return;
             }
 
-            StringBuilder form = new StringBuilder("<html><body>");
-            form.append("<h1>Generate Commit Report</h1>");
+            // Build form with repo and branch dropdowns
+            StringBuilder form = new StringBuilder("<html><head><title>Commit Report</title></head><body>");
+            form.append("<h1>Select Parameters for Commit Report</h1>");
             form.append("<form method='GET' action='/generate'>");
             form.append("After Date (YYYY-MM-DD): <input name='afterDate' value='2023-01-01'><br><br>");
             form.append("Before Date (YYYY-MM-DD): <input name='beforeDate' value='2023-12-31'><br><br>");
@@ -54,7 +55,6 @@ public class WebReportServer {
             for (List<String> brs : repoData.values()) {
                 allBranches.addAll(brs);
             }
-
             form.append("Branch: <select name='branch'>");
             form.append("<option value='ALL'>All Branches</option>");
             for (String b : allBranches) {
@@ -93,9 +93,18 @@ public class WebReportServer {
             OutputStream os = exchange.getResponseBody();
             PrintWriter pw = new PrintWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8), true);
 
-            // Show processing message
-            pw.println("<html><head><title>Processing</title></head><body>");
-            pw.println("<h2>Processing your request, please wait...</h2>");
+            // Show a processing message first
+            pw.println("<html><head><title>Processing</title>");
+            pw.println("<style>");
+            pw.println("body { font-family: Arial, sans-serif; background: #f9f9f9; }");
+            pw.println("h1, h2 { color: #333; }");
+            pw.println("table { border-collapse: collapse; width: 80%; margin: 20px auto; }");
+            pw.println("th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }");
+            pw.println("th { background: #f2f2f2; }");
+            pw.println("td { max-width: 200px; word-wrap: break-word; overflow-wrap: break-word; }");
+            pw.println(".center { text-align: center; margin-top:50px; }");
+            pw.println("</style></head><body>");
+            pw.println("<div class='center'><h2>Processing your request, please wait...</h2></div>");
             pw.flush();
 
             String baseDirName = "Code Commit Counts";
@@ -107,8 +116,9 @@ public class WebReportServer {
             Map<String, Integer> globalAuthorCounts = new HashMap<>();
 
             try {
+                // Process based on user selection
                 if (repoUrl.equals("ALL")) {
-                    // All repos
+                    // All repositories
                     for (Map.Entry<String, List<String>> entry : repoData.entrySet()) {
                         String currentRepo = entry.getKey();
                         List<String> branches = entry.getValue();
@@ -124,7 +134,7 @@ public class WebReportServer {
                     // Single repo
                     List<String> branches = repoData.get(repoUrl);
                     if (branches == null) {
-                        System.err.println("Repo " + repoUrl + " not found.");
+                        System.err.println("Repo " + repoUrl + " not found in repoData.");
                     } else {
                         if (branch.equals("ALL")) {
                             processRepoBranches(repoUrl, branches, afterDate, beforeDate, baseDir, globalAuthorCounts);
@@ -136,12 +146,13 @@ public class WebReportServer {
                     }
                 }
 
+                // After processing all, show final results
                 Map<String, Integer> finalUidCounts = normalizeAuthors(globalAuthorCounts, devMap);
 
-                pw.println("<h2>Done! Here are the results:</h2>");
-                pw.println("<p><b>Repository:</b> " + repoUrl + "</p>");
-                pw.println("<p><b>Branch:</b> " + branch + "</p>");
-                pw.println("<p><b>Date Range:</b> " + afterDate + " to " + beforeDate + "</p>");
+                pw.println("<h1 style='text-align:center;'>Commit Report</h1>");
+                pw.println("<p style='text-align:center;'><b>Repository:</b> " + repoUrl + "<br>");
+                pw.println("<b>Branch:</b> " + branch + "<br>");
+                pw.println("<b>Date Range:</b> " + afterDate + " to " + beforeDate + "</p>");
                 pw.println(generateHtmlReport(finalUidCounts, devMap));
                 pw.println("</body></html>");
             } catch (Exception e) {
@@ -227,8 +238,7 @@ public class WebReportServer {
 
     private static Map<String, Integer> normalizeAuthors(Map<String, Integer> authorCounts, Map<String, DevInfo> devMap) {
         if (devMap == null) {
-            // No devMap means no name mapping
-            // Just return authorCounts with keys as authors.
+            // No devMap means no name mapping, just return as is
             return new HashMap<>(authorCounts);
         }
 
@@ -247,18 +257,12 @@ public class WebReportServer {
 
     private static String generateHtmlReport(Map<String, Integer> finalUidCounts, Map<String, DevInfo> devMap) {
         StringBuilder html = new StringBuilder();
-        html.append("<table border='1' style='border-collapse:collapse;'>");
+        html.append("<table>");
         html.append("<tr><th>UID</th><th>Name</th><th>Commits</th></tr>");
         for (Map.Entry<String, Integer> entry : finalUidCounts.entrySet()) {
             String uid = entry.getKey();
             int commits = entry.getValue();
-            String name = "";
-            if (devMap != null && devMap.containsKey(uid)) {
-                name = devMap.get(uid).getName();
-            } else {
-                // If no devMap, uid might actually be the author string.
-                name = uid;
-            }
+            String name = (devMap != null && devMap.containsKey(uid)) ? devMap.get(uid).getName() : uid;
             html.append("<tr><td>").append(uid).append("</td>")
                     .append("<td>").append(name).append("</td>")
                     .append("<td>").append(commits).append("</td></tr>");
