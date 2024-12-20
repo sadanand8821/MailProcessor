@@ -1,0 +1,15 @@
+public class DevInfo {
+    private String uid;
+    private String name;
+    private Set<String> aliases = new HashSet<>();
+
+    public DevInfo(String uid, String name, Set<String> aliases) {
+        this.uid = uid;
+        this.name = name;
+        this.aliases = aliases;
+    }
+
+    public String getUid() { return uid; }
+    public String getName() { return name; }
+    public Set<String> getAliases() { return aliases; }
+}
