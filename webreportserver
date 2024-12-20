@@ -237,23 +237,36 @@ public class WebReportServer {
     }
 
     private static Map<String, Integer> normalizeAuthors(Map<String, Integer> authorCounts, Map<String, DevInfo> devMap) {
-        if (devMap == null) {
-            // No devMap means no name mapping, just return as is
-            return new HashMap<>(authorCounts);
+    // If no devMap is provided, just return authorCounts unchanged.
+    if (devMap == null) {
+        return new HashMap<>(authorCounts);
+    }
+
+    Map<String, Integer> finalUidCounts = new HashMap<>();
+    for (Map.Entry<String, DevInfo> entry : devMap.entrySet()) {
+        String uid = entry.getKey();
+        DevInfo info = entry.getValue();
+
+        // Collect all possible keys that could appear in authorCounts:
+        // UID itself, the Name, and all Aliases
+        Set<String> possibleKeys = new HashSet<>();
+        possibleKeys.add(uid); // in case the shortlog used UID as author
+        String name = info.getName().trim();
+        if (!name.isEmpty()) {
+            possibleKeys.add(name); // in case the shortlog used Name as author
+        }
+        possibleKeys.addAll(info.getAliases()); // in case the shortlog used any alias
+
+        int total = 0;
+        for (String key : possibleKeys) {
+            total += authorCounts.getOrDefault(key, 0);
         }
 
-        Map<String, Integer> finalUidCounts = new HashMap<>();
-        for (Map.Entry<String, DevInfo> entry : devMap.entrySet()) {
-            String uid = entry.getKey();
-            DevInfo info = entry.getValue();
-            int total = 0;
-            for (String alias : info.getAliases()) {
-                total += authorCounts.getOrDefault(alias, 0);
-            }
-            finalUidCounts.put(uid, total);
-        }
-        return finalUidCounts;
+        finalUidCounts.put(uid, total);
     }
+
+    return finalUidCounts;
+}
 
     private static String generateHtmlReport(Map<String, Integer> finalUidCounts, Map<String, DevInfo> devMap) {
         StringBuilder html = new StringBuilder();
