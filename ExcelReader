@@ -29,28 +29,33 @@ public class ExcelReader {
     return repoData;
 }
     
-    public static Map<String, Set<String>> readDevMap(String excelPath) throws IOException {
-        // Assuming:
-        // Row format: UID | AuthorName1 | AuthorName2 | ...
-        Map<String, Set<String>> devMap = new HashMap<>();
-        
-        try (FileInputStream fis = new FileInputStream(excelPath)) {
-            Workbook wb = new XSSFWorkbook(fis);
-            Sheet sheet = wb.getSheetAt(0);
-            for (Row row : sheet) {
-                Cell uidCell = row.getCell(0);
-                if (uidCell == null) continue;
-                String uid = uidCell.getStringCellValue().trim();
-                Set<String> aliases = new HashSet<>();
-                for (int i = 1; i < row.getLastCellNum(); i++) {
-                    Cell aliasCell = row.getCell(i);
-                    if (aliasCell != null) {
-                        aliases.add(aliasCell.getStringCellValue().trim());
-                    }
-                }
-                devMap.put(uid, aliases);
+    public static Map<String, DevInfo> readDevMap(String excelPath) throws IOException {
+    Map<String, DevInfo> devMap = new HashMap<>();
+    try (FileInputStream fis = new FileInputStream(excelPath);
+         Workbook wb = new XSSFWorkbook(fis)) {
+        Sheet sheet = wb.getSheetAt(0);
+        // Assuming first row is header
+        for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+            Row row = sheet.getRow(i);
+            if (row == null) continue;
+            Cell uidCell = row.getCell(0);
+            Cell nameCell = row.getCell(1);
+            if (uidCell == null || nameCell == null) continue;
+
+            String uid = uidCell.getStringCellValue().trim();
+            String name = nameCell.getStringCellValue().trim();
+
+            Set<String> aliases = new HashSet<>();
+            for (int c = 2; c <= row.getLastCellNum(); c++) {
+                Cell aliasCell = row.getCell(c);
+                if (aliasCell == null) break;
+                String alias = aliasCell.getStringCellValue().trim();
+                if (!alias.isEmpty()) aliases.add(alias);
             }
+
+            devMap.put(uid, new DevInfo(uid, name, aliases));
         }
-        return devMap;
     }
+    return devMap;
+}
 }
