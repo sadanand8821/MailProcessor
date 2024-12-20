@@ -1,30 +1,33 @@
 public class ExcelReader {
-    public static List<RepoInfo> readRepoData(String excelPath) throws IOException {
-        List<RepoInfo> repoDataList = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(excelPath);
-             Workbook wb = new XSSFWorkbook(fis)) {
-            Sheet sheet = wb.getSheetAt(0);
-            for (Row row : sheet) {
-                if (row.getRowNum() == 0) {
-                    // Assuming first row is header, skip if needed
-                    continue;
-                }
+    public static Map<String, List<String>> readRepoData(String excelPath) throws IOException {
+    Map<String, List<String>> repoData = new HashMap<>();
+    try (FileInputStream fis = new FileInputStream(excelPath);
+         Workbook wb = new XSSFWorkbook(fis)) {
+        Sheet sheet = wb.getSheetAt(0);
+        // Assuming first row is headers, start from second row
+        for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+            Row row = sheet.getRow(i);
+            if (row == null) continue;
+            Cell repoCell = row.getCell(0);
+            Cell branchesCell = row.getCell(1);
 
-                Cell urlCell = row.getCell(0);
-                Cell branchCell = row.getCell(1);
-
-                if (urlCell != null && branchCell != null) {
-                    String repoUrl = urlCell.getStringCellValue().trim();
-                    String branch = branchCell.getStringCellValue().trim();
-
-                    if (!repoUrl.isEmpty() && !branch.isEmpty()) {
-                        repoDataList.add(new RepoInfo(repoUrl, branch));
+            if (repoCell != null) {
+                String repoUrl = repoCell.getStringCellValue().trim();
+                List<String> branches = new ArrayList<>();
+                if (branchesCell != null) {
+                    String branchStr = branchesCell.getStringCellValue().trim();
+                    if (!branchStr.isEmpty()) {
+                        for (String b : branchStr.split(",")) {
+                            branches.add(b.trim());
+                        }
                     }
                 }
+                repoData.put(repoUrl, branches);
             }
         }
-        return repoDataList;
     }
+    return repoData;
+}
     
     public static Map<String, Set<String>> readDevMap(String excelPath) throws IOException {
         // Assuming:
