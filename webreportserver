@@ -1,0 +1,272 @@
+package com.example;
+
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+
+import java.io.*;
+import java.net.InetSocketAddress;
+import java.util.*;
+
+public class WebReportServer {
+
+    public static void main(String[] args) throws Exception {
+        // Start an HTTP server on port 8080
+        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
+
+        // Context for the form page
+        server.createContext("/", new FormHandler());
+
+        // Context for generating the report
+        server.createContext("/generate", new GenerateHandler());
+
+        server.setExecutor(null); // creates a default executor
+        server.start();
+        System.out.println("Server running at http://localhost:8080/");
+    }
+
+    static class FormHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            // Only handle GET requests for the form
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1); // Method not allowed
+                return;
+            }
+
+            String response = "<html><body>" +
+                    "<h1>Generate Commit Report</h1>" +
+                    "<form method='GET' action='/generate'>" +
+                    "After Date (YYYY-MM-DD): <input name='afterDate' value='2023-01-01'><br><br>" +
+                    "Before Date (YYYY-MM-DD): <input name='beforeDate' value='2023-12-31'><br><br>" +
+                    "Repo URL: <input name='repoUrl' value='https://github.com/example/repo1.git'><br><br>" +
+                    "Branch: <input name='branch' value='main'><br><br>" +
+                    "<input type='submit' value='Generate'>" +
+                    "</form>" +
+                    "</body></html>";
+
+            byte[] bytes = response.getBytes();
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+        }
+    }
+
+    static class GenerateHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            // Only handle GET requests in this example
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1); // Method not allowed
+                return;
+            }
+
+            String query = exchange.getRequestURI().getQuery();
+            Map<String, String> params = parseQuery(query);
+
+            String afterDate = params.getOrDefault("afterDate", "2023-01-01");
+            String beforeDate = params.getOrDefault("beforeDate", "2023-12-31");
+            String repoUrl = params.get("repoUrl"); // If no repoUrl provided, might be null
+            String branch = params.getOrDefault("branch", "main");
+
+            if (repoUrl == null || repoUrl.trim().isEmpty()) {
+                String error = "<html><body><h2>Error: Repo URL not provided.</h2></body></html>";
+                writeResponse(exchange, 400, error);
+                return;
+            }
+
+            // Prepare working directory
+            String baseDirName = "Code Commit Counts";
+            File baseDir = new File(baseDirName);
+            if (!baseDir.exists()) {
+                baseDir.mkdir();
+            }
+
+            // Extract repo name from URL
+            String repoName = extractRepoName(repoUrl);
+
+            // Clone the repo
+            try {
+                cloneRepository(baseDir, repoUrl, repoName);
+            } catch (Exception e) {
+                String error = "<html><body><h2>Error cloning repo: " + e.getMessage() + "</h2></body></html>";
+                writeResponse(exchange, 500, error);
+                return;
+            }
+
+            File repoFolder = new File(baseDir, repoName);
+            if (!repoFolder.exists()) {
+                String error = "<html><body><h2>Error: Repo folder not created. Check git clone step.</h2></body></html>";
+                writeResponse(exchange, 500, error);
+                return;
+            }
+
+            // Run shortlog
+            List<String> shortlogOutput;
+            try {
+                shortlogOutput = runShortlog(repoFolder, branch, afterDate, beforeDate);
+            } catch (Exception e) {
+                deleteDirectory(repoFolder);
+                String error = "<html><body><h2>Error running git shortlog: " + e.getMessage() + "</h2></body></html>";
+                writeResponse(exchange, 500, error);
+                return;
+            }
+
+            // Parse shortlog output
+            Map<String, Integer> globalAuthorCounts = new HashMap<>();
+            parseShortlogOutput(shortlogOutput, globalAuthorCounts);
+
+            // Read DevMap to normalize authors
+            Map<String, Set<String>> devMap = null;
+            try {
+                devMap = ExcelReader.readDevMap("DevMap.xlsx");
+            } catch (IOException e) {
+                // If devMap not found, it's optional. Just print a warning.
+                System.err.println("Warning: Could not read DevMap.xlsx. Proceeding without normalization.");
+            }
+
+            Map<String, Integer> finalUidCounts = normalizeAuthors(globalAuthorCounts, devMap);
+
+            // Clean up repo folder
+            deleteDirectory(repoFolder);
+
+            // Generate HTML report
+            String reportHtml = generateHtmlReport(finalUidCounts, afterDate, beforeDate, repoUrl, branch);
+            writeResponse(exchange, 200, reportHtml);
+        }
+    }
+
+    // Utility methods
+
+    private static String extractRepoName(String repoUrl) {
+        String name = repoUrl.substring(repoUrl.lastIndexOf('/') + 1);
+        if (name.endsWith(".git")) {
+            name = name.substring(0, name.length() - 4);
+        }
+        return name;
+    }
+
+    private static void cloneRepository(File baseDir, String repoUrl, String repoName) throws IOException, InterruptedException {
+        List<String> cloneCmd = Arrays.asList("git", "clone", repoUrl, repoName);
+        GitCommandExecutor.runGitCommand(baseDir, cloneCmd);
+    }
+
+    private static List<String> runShortlog(File repoFolder, String branch, String afterDate, String beforeDate) throws IOException, InterruptedException {
+        List<String> shortlogCmd = Arrays.asList(
+            "git", "shortlog", "-s", "-n", "-e",
+            branch,
+            "--after=" + afterDate,
+            "--before=" + beforeDate
+        );
+        return GitCommandExecutor.runGitCommand(repoFolder, shortlogCmd);
+    }
+
+    private static void parseShortlogOutput(List<String> lines, Map<String, Integer> counts) {
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) continue;
+            int spaceIndex = indexOfFirstNonDigit(trimmed);
+            if (spaceIndex == -1) continue;
+            String countStr = trimmed.substring(0, spaceIndex).trim();
+            String author = trimmed.substring(spaceIndex).trim();
+            try {
+                int commitCount = Integer.parseInt(countStr);
+                counts.put(author, counts.getOrDefault(author, 0) + commitCount);
+            } catch (NumberFormatException e) {
+                System.err.println("Failed to parse commit count from line: " + line);
+            }
+        }
+    }
+
+    private static int indexOfFirstNonDigit(String str) {
+        for (int i = 0; i < str.length(); i++) {
+            if (!Character.isDigit(str.charAt(i))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static Map<String, Integer> normalizeAuthors(Map<String, Integer> authorCounts, Map<String, Set<String>> devMap) {
+        if (devMap == null) {
+            // If no devMap provided, just return authorCounts directly under some default UID logic or leave it as is
+            // For simplicity, let's return an empty map if devMap not available
+            return new HashMap<>(authorCounts);
+        }
+
+        Map<String, Integer> finalUidCounts = new HashMap<>();
+        for (Map.Entry<String, Set<String>> entry : devMap.entrySet()) {
+            String uid = entry.getKey();
+            Set<String> aliases = entry.getValue();
+            int total = 0;
+            for (String alias : aliases) {
+                total += authorCounts.getOrDefault(alias, 0);
+            }
+            finalUidCounts.put(uid, total);
+        }
+        return finalUidCounts;
+    }
+
+    private static void deleteDirectory(File dir) {
+        if (!dir.exists()) return;
+        if (dir.isDirectory()) {
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    deleteDirectory(f);
+                }
+            }
+        }
+        dir.delete();
+    }
+
+    private static Map<String, String> parseQuery(String query) {
+        Map<String, String> params = new HashMap<>();
+        if (query != null && !query.isEmpty()) {
+            for (String pair : query.split("&")) {
+                String[] kv = pair.split("=");
+                if (kv.length == 2) {
+                    // URL decode if needed
+                    params.put(kv[0], kv[1]);
+                }
+            }
+        }
+        return params;
+    }
+
+    private static void writeResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
+        byte[] bytes = response.getBytes();
+        exchange.sendResponseHeaders(statusCode, bytes.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(bytes);
+        }
+    }
+
+    private static String generateHtmlReport(Map<String, Integer> finalUidCounts, String afterDate, String beforeDate, String repoUrl, String branch) {
+        StringBuilder html = new StringBuilder();
+        html.append("<html><head><title>Commit Report</title>")
+            .append("<style>")
+            .append("table { border-collapse: collapse; width: 50%; }")
+            .append("th, td { border: 1px solid #aaa; padding: 8px; text-align: left; }")
+            .append("th { background-color: #f2f2f2; }")
+            .append("h1 { font-family: Arial; }")
+            .append("</style></head><body>");
+
+        html.append("<h1>Commit Report</h1>");
+        html.append("<p><b>Repository:</b> ").append(repoUrl).append("</p>");
+        html.append("<p><b>Branch:</b> ").append(branch).append("</p>");
+        html.append("<p><b>Date Range:</b> ").append(afterDate).append(" to ").append(beforeDate).append("</p>");
+
+        html.append("<table>");
+        html.append("<tr><th>UID</th><th>Commits</th></tr>");
+        for (Map.Entry<String, Integer> entry : finalUidCounts.entrySet()) {
+            html.append("<tr><td>").append(entry.getKey()).append("</td>")
+                .append("<td>").append(entry.getValue()).append("</td></tr>");
+        }
+        html.append("</table>");
+
+        html.append("</body></html>");
+        return html.toString();
+    }
+}
