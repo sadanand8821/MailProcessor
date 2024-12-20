@@ -1,7 +1,11 @@
+package com.example;
+
+import java.util.Set;
+
 public class DevInfo {
     private String uid;
     private String name;
-    private Set<String> aliases = new HashSet<>();
+    private Set<String> aliases;
 
     public DevInfo(String uid, String name, Set<String> aliases) {
         this.uid = uid;
@@ -9,7 +13,15 @@ public class DevInfo {
         this.aliases = aliases;
     }
 
-    public String getUid() { return uid; }
-    public String getName() { return name; }
-    public Set<String> getAliases() { return aliases; }
+    public String getUid() {
+        return uid;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public Set<String> getAliases() {
+        return aliases;
+    }
 }
