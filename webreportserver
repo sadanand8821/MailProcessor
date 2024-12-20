@@ -237,32 +237,39 @@ public class WebReportServer {
     }
 
     private static Map<String, Integer> normalizeAuthors(Map<String, Integer> authorCounts, Map<String, DevInfo> devMap) {
-    // If devMap is null, we have no mapping. You can decide what to do here:
-    // Since the requirement is to use devMap only, if it's null, just return an empty map or authorCounts as is.
     if (devMap == null) {
-        return new HashMap<>(); // or return authorCounts if you prefer
+        // No devMap means we cannot map authors to UIDs and Names.
+        // Return empty since we want devMap only scenario.
+        return new HashMap<>();
+    }
+
+    // Normalize authorCounts keys to a canonical form (lowercase, trimmed)
+    Map<String, Integer> normalizedCounts = new HashMap<>();
+    for (Map.Entry<String, Integer> e : authorCounts.entrySet()) {
+        String key = e.getKey().trim().toLowerCase();
+        normalizedCounts.put(key, normalizedCounts.getOrDefault(key, 0) + e.getValue());
     }
 
     Map<String, Integer> finalUidCounts = new HashMap<>();
 
     for (Map.Entry<String, DevInfo> entry : devMap.entrySet()) {
-        String uid = entry.getKey();
+        String uid = entry.getKey().trim();
         DevInfo info = entry.getValue();
-
-        // Gather all possible keys
-        Set<String> possibleKeys = new HashSet<>();
-        possibleKeys.add(uid);
-
         String name = info.getName().trim();
-        if (!name.isEmpty()) {
-            possibleKeys.add(name);
-        }
 
-        possibleKeys.addAll(info.getAliases());
+        // Collect possible keys (lowercased, trimmed)
+        Set<String> possibleKeys = new HashSet<>();
+        possibleKeys.add(uid.toLowerCase());
+        if (!name.isEmpty()) {
+            possibleKeys.add(name.toLowerCase());
+        }
+        for (String alias : info.getAliases()) {
+            possibleKeys.add(alias.trim().toLowerCase());
+        }
 
         int total = 0;
         for (String key : possibleKeys) {
-            total += authorCounts.getOrDefault(key, 0);
+            total += normalizedCounts.getOrDefault(key, 0);
         }
 
         finalUidCounts.put(uid, total);
