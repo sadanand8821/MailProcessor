@@ -14,6 +14,7 @@ public class ExcelReader {
         try (FileInputStream fis = new FileInputStream(excelPath);
              Workbook wb = new XSSFWorkbook(fis)) {
             Sheet sheet = wb.getSheetAt(0);
+            // Assuming first row is header
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
@@ -55,7 +56,6 @@ public class ExcelReader {
                 String name = nameCell.getStringCellValue().trim();
                 Set<String> aliases = new HashSet<>();
 
-                // Aliases start from column 2 onwards
                 for (int c = 2; c < row.getLastCellNum(); c++) {
                     Cell aliasCell = row.getCell(c);
                     if (aliasCell == null) continue;
