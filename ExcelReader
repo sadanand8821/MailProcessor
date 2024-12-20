@@ -1,61 +1,73 @@
-public class ExcelReader {
-    public static Map<String, List<String>> readRepoData(String excelPath) throws IOException {
-    Map<String, List<String>> repoData = new HashMap<>();
-    try (FileInputStream fis = new FileInputStream(excelPath);
-         Workbook wb = new XSSFWorkbook(fis)) {
-        Sheet sheet = wb.getSheetAt(0);
-        // Assuming first row is headers, start from second row
-        for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-            Row row = sheet.getRow(i);
-            if (row == null) continue;
-            Cell repoCell = row.getCell(0);
-            Cell branchesCell = row.getCell(1);
+package com.example;
 
-            if (repoCell != null) {
-                String repoUrl = repoCell.getStringCellValue().trim();
-                List<String> branches = new ArrayList<>();
-                if (branchesCell != null) {
-                    String branchStr = branchesCell.getStringCellValue().trim();
-                    if (!branchStr.isEmpty()) {
-                        for (String b : branchStr.split(",")) {
-                            branches.add(b.trim());
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.*;
+
+public class ExcelReader {
+
+    public static Map<String, List<String>> readRepoData(String excelPath) throws IOException {
+        Map<String, List<String>> repoData = new HashMap<>();
+        try (FileInputStream fis = new FileInputStream(excelPath);
+             Workbook wb = new XSSFWorkbook(fis)) {
+            Sheet sheet = wb.getSheetAt(0);
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+                Cell repoCell = row.getCell(0);
+                Cell branchesCell = row.getCell(1);
+
+                if (repoCell != null) {
+                    String repoUrl = repoCell.getStringCellValue().trim();
+                    List<String> branches = new ArrayList<>();
+                    if (branchesCell != null) {
+                        String branchStr = branchesCell.getStringCellValue().trim();
+                        if (!branchStr.isEmpty()) {
+                            for (String b : branchStr.split(",")) {
+                                branches.add(b.trim());
+                            }
                         }
                     }
+                    repoData.put(repoUrl, branches);
                 }
-                repoData.put(repoUrl, branches);
             }
         }
+        return repoData;
     }
-    return repoData;
-}
-    
+
     public static Map<String, DevInfo> readDevMap(String excelPath) throws IOException {
-    Map<String, DevInfo> devMap = new HashMap<>();
-    try (FileInputStream fis = new FileInputStream(excelPath);
-         Workbook wb = new XSSFWorkbook(fis)) {
-        Sheet sheet = wb.getSheetAt(0);
-        // Assuming first row is header
-        for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-            Row row = sheet.getRow(i);
-            if (row == null) continue;
-            Cell uidCell = row.getCell(0);
-            Cell nameCell = row.getCell(1);
-            if (uidCell == null || nameCell == null) continue;
+        Map<String, DevInfo> devMap = new HashMap<>();
+        try (FileInputStream fis = new FileInputStream(excelPath);
+             Workbook wb = new XSSFWorkbook(fis)) {
+            Sheet sheet = wb.getSheetAt(0);
+            // Assuming first row is header: UID | Name | Alias1 | Alias2 | ...
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+                Cell uidCell = row.getCell(0);
+                Cell nameCell = row.getCell(1);
+                if (uidCell == null || nameCell == null) continue;
 
-            String uid = uidCell.getStringCellValue().trim();
-            String name = nameCell.getStringCellValue().trim();
+                String uid = uidCell.getStringCellValue().trim();
+                String name = nameCell.getStringCellValue().trim();
+                Set<String> aliases = new HashSet<>();
 
-            Set<String> aliases = new HashSet<>();
-            for (int c = 2; c <= row.getLastCellNum(); c++) {
-                Cell aliasCell = row.getCell(c);
-                if (aliasCell == null) break;
-                String alias = aliasCell.getStringCellValue().trim();
-                if (!alias.isEmpty()) aliases.add(alias);
+                // Aliases start from column 2 onwards
+                for (int c = 2; c < row.getLastCellNum(); c++) {
+                    Cell aliasCell = row.getCell(c);
+                    if (aliasCell == null) continue;
+                    String alias = aliasCell.getStringCellValue().trim();
+                    if (!alias.isEmpty()) {
+                        aliases.add(alias);
+                    }
+                }
+
+                devMap.put(uid, new DevInfo(uid, name, aliases));
             }
-
-            devMap.put(uid, new DevInfo(uid, name, aliases));
         }
+        return devMap;
     }
-    return devMap;
-}
 }
