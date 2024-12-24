@@ -83,78 +83,64 @@ public class WebReportServer {
     }
 
     static class GenerateHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-                exchange.sendResponseHeaders(405, -1);
-                return;
-            }
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(405, -1);
+            return;
+        }
 
-            String query = exchange.getRequestURI().getQuery();
-            Map<String, String> params = parseQuery(query);
+        String query = exchange.getRequestURI().getQuery();
+        Map<String, String> params = parseQuery(query);
 
-            String afterDate = params.getOrDefault("afterDate", "2023-01-01");
-            String beforeDate = params.getOrDefault("beforeDate", "2023-12-31");
-            String repoUrl = params.getOrDefault("repoUrl", "ALL");
-            String branch = params.getOrDefault("branch", "ALL");
-            String developerUid = params.getOrDefault("developer", "ALL");
+        String afterDate = params.getOrDefault("afterDate", "2023-01-01");
+        String beforeDate = params.getOrDefault("beforeDate", "2023-12-31");
+        String repoUrl = params.getOrDefault("repoUrl", "ALL");
+        String branch = params.getOrDefault("branch", "ALL");
+        String developerUid = params.getOrDefault("developer", "ALL");
 
-            exchange.sendResponseHeaders(200, 0);
-            OutputStream os = exchange.getResponseBody();
-            PrintWriter pw = new PrintWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8), true);
+        exchange.sendResponseHeaders(200, 0);
+        OutputStream os = exchange.getResponseBody();
+        PrintWriter pw = new PrintWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8), true);
 
-            // Processing message
-            pw.println("<html><head><title>Processing</title>");
-            pw.println("<style>");
-            pw.println("body { font-family: Arial, sans-serif; background: #f9f9f9; }");
-            pw.println("h1, h2 { color: #333; }");
-            pw.println("table { border-collapse: collapse; width: 80%; margin: 20px auto; }");
-            pw.println("th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }");
-            pw.println("th { background: #f2f2f2; }");
-            pw.println("td { max-width: 200px; word-wrap: break-word; overflow-wrap: break-word; }");
-            pw.println(".center { text-align: center; margin-top:50px; }");
-            pw.println("</style></head><body>");
-            pw.println("<div class='center'><h2>Processing your request, please wait...</h2></div>");
-            pw.flush();
+        // Processing message
+        pw.println("<html><head><title>Processing</title></head><body>");
+        pw.println("<div><h2>Processing your request, please wait...</h2></div>");
+        pw.flush();
 
-            Map<String, Integer> globalAuthorCounts = new HashMap<>();
+        // Data structure to hold nested commit counts
+        Map<String, Map<String, Map<String, Integer>>> repoBranchCounts = new HashMap<>();
 
-            try {
-                // Process repositories and branches based on user input
-                if (repoUrl.equals("ALL")) {
-                    for (Map.Entry<String, List<String>> entry : repoData.entrySet()) {
-                        String currentRepo = entry.getKey();
-                        List<String> branches = entry.getValue();
-                        if (branch.equals("ALL")) {
-                            processRepoBranches(currentRepo, branches, afterDate, beforeDate, globalAuthorCounts);
-                        } else if (branches.contains(branch)) {
-                            processSingleRepoBranch(currentRepo, branch, afterDate, beforeDate, globalAuthorCounts);
-                        }
-                    }
-                } else {
-                    List<String> branches = repoData.get(repoUrl);
-                    if (branches != null) {
-                        if (branch.equals("ALL")) {
-                            processRepoBranches(repoUrl, branches, afterDate, beforeDate, globalAuthorCounts);
-                        } else if (branches.contains(branch)) {
-                            processSingleRepoBranch(repoUrl, branch, afterDate, beforeDate, globalAuthorCounts);
-                        }
+        try {
+            // Process repositories and branches
+            if (repoUrl.equals("ALL")) {
+                for (Map.Entry<String, List<String>> entry : repoData.entrySet()) {
+                    String currentRepo = entry.getKey();
+                    List<String> branches = entry.getValue();
+                    if (branch.equals("ALL")) {
+                        processRepoBranches(currentRepo, branches, afterDate, beforeDate, repoBranchCounts);
+                    } else if (branches.contains(branch)) {
+                        processSingleRepoBranch(currentRepo, branch, afterDate, beforeDate, repoBranchCounts);
                     }
                 }
-
-                // Normalize authors and generate report
-                Map<String, Integer> finalUidCounts = normalizeAuthors(globalAuthorCounts, devMap);
-                pw.println("<h1 style='text-align:center;'>Commit Report</h1>");
-                pw.println("<p style='text-align:center;'><b>Repository:</b> " + repoUrl + "<br>");
-                pw.println("<b>Branch:</b> " + branch + "<br>");
-                pw.println("<b>Date Range:</b> " + afterDate + " to " + beforeDate + "</p>");
-                pw.println(generateHtmlReport(finalUidCounts, devMap, developerUid));
-                pw.println("</body></html>");
-            } catch (Exception e) {
-                pw.println("<h2>Error occurred: " + e.getMessage() + "</h2></body></html>");
-            } finally {
-                pw.close();
+            } else {
+                List<String> branches = repoData.get(repoUrl);
+                if (branches != null) {
+                    if (branch.equals("ALL")) {
+                        processRepoBranches(repoUrl, branches, afterDate, beforeDate, repoBranchCounts);
+                    } else if (branches.contains(branch)) {
+                        processSingleRepoBranch(repoUrl, branch, afterDate, beforeDate, repoBranchCounts);
+                    }
+                }
             }
+
+            // Generate the HTML report using the updated data structure
+            pw.println(generateHtmlReport(repoBranchCounts, devMap));
+            pw.println("</body></html>");
+        } catch (Exception e) {
+            pw.println("<h2>Error occurred: " + e.getMessage() + "</h2></body></html>");
+        } finally {
+            pw.close();
         }
     }
 
@@ -206,20 +192,21 @@ public class WebReportServer {
     return html.toString();
 }
 
-    private static void processRepoBranches(String repoUrl, List<String> branches, String afterDate, String beforeDate, Map<String, Integer> globalAuthorCounts) throws IOException, InterruptedException {
+    private void processRepoBranches(String repoUrl, List<String> branches, String afterDate, String beforeDate, Map<String, Map<String, Map<String, Integer>>> repoBranchCounts) throws IOException, InterruptedException {
         for (String branch : branches) {
-            processSingleRepoBranch(repoUrl, branch, afterDate, beforeDate, globalAuthorCounts);
+            processSingleRepoBranch(repoUrl, branch, afterDate, beforeDate, repoBranchCounts);
         }
     }
 
-    private static void processSingleRepoBranch(String repoUrl, String branch, String afterDate, String beforeDate, Map<String, Integer> globalAuthorCounts) throws IOException, InterruptedException {
+    private void processSingleRepoBranch(String repoUrl, String branch, String afterDate, String beforeDate, Map<String, Map<String, Map<String, Integer>>> repoBranchCounts) throws IOException, InterruptedException {
+        // Clone repository and fetch shortlog data (same as before)
         String repoName = extractRepoName(repoUrl);
         File repoFolder = new File("Code Commit Counts", repoName);
 
         cloneRepository(repoFolder.getParentFile(), repoUrl, repoName);
 
         List<String> shortlogOutput = runShortlog(repoFolder, branch, afterDate, beforeDate);
-        parseShortlogOutput(shortlogOutput, globalAuthorCounts);
+        parseShortlogOutput(shortlogOutput, repoName, branch, repoBranchCounts);
 
         deleteDirectory(repoFolder);
     }
@@ -238,17 +225,26 @@ public class WebReportServer {
         return GitCommandExecutor.runGitCommand(repoFolder, shortlogCmd);
     }
 
-    private static void parseShortlogOutput(List<String> lines, Map<String, Integer> counts) {
+    private void parseShortlogOutput(List<String> lines, String repoName, String branch, Map<String, Map<String, Map<String, Integer>>> repoBranchCounts) {
+        repoBranchCounts.putIfAbsent(repoName, new HashMap<>());
+        Map<String, Map<String, Integer>> branchData = repoBranchCounts.get(repoName);
+
+        branchData.putIfAbsent(branch, new HashMap<>());
+        Map<String, Integer> developerCounts = branchData.get(branch);
+
         for (String line : lines) {
             String trimmed = line.trim();
             if (trimmed.isEmpty()) continue;
+
             int spaceIndex = indexOfFirstNonDigit(trimmed);
             if (spaceIndex == -1) continue;
+
             String countStr = trimmed.substring(0, spaceIndex).trim();
             String author = trimmed.substring(spaceIndex).trim();
+
             try {
                 int commitCount = Integer.parseInt(countStr);
-                counts.put(author, counts.getOrDefault(author, 0) + commitCount);
+                developerCounts.put(author, developerCounts.getOrDefault(author, 0) + commitCount);
             } catch (NumberFormatException e) {
                 System.err.println("Failed to parse commit count from line: " + line);
             }
