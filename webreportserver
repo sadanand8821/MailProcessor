@@ -81,6 +81,31 @@ public class WebReportServer {
             }
         }
     }
+private static String findGitExecutable() throws IOException {
+    String gitExecutable = "git"; // Default for most systems
+    if (System.getProperty("os.name").toLowerCase().contains("win")) {
+        gitExecutable = "git.exe"; // Windows-specific
+    }
+
+    ProcessBuilder pb = new ProcessBuilder(gitExecutable, "--version");
+    pb.redirectErrorStream(true);
+    try {
+        Process process = pb.start();
+        process.waitFor();
+        if (process.exitValue() == 0) {
+            return gitExecutable; // Found in PATH
+        }
+    } catch (IOException | InterruptedException e) {
+        throw new IOException("Git executable not found. Ensure Git is installed and added to the PATH.");
+    }
+    throw new IOException("Git executable not found.");
+}
+
+String gitPath = findGitExecutable();
+ProcessBuilder pb = new ProcessBuilder(gitPath, "clone", repoUrl, repoName);
+pb.directory(new File(baseDir));
+Process process = pb.start();
+process.waitFor();
 
     static class GenerateHandler implements HttpHandler {
     @Override
