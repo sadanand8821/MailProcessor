@@ -146,29 +146,31 @@ public class WebReportServer {
 
     // Utility methods
 
-    private static String generateHtmlReport(Map<String, Integer> finalUidCounts, Map<String, DevInfo> devMap, String developerUid, Map<String, Map<String, Map<String, Integer>>> repoBranchCounts) {
+    private static String generateHtmlReport(
+        Map<String, Map<String, Map<String, Integer>>> repoBranchCounts,
+        Map<String, DevInfo> devMap) {
     StringBuilder html = new StringBuilder();
+
+    // Start HTML table
     html.append("<table>");
     html.append("<tr><th>Repository</th><th>Branch</th><th>UID</th><th>Name</th><th>Commits</th></tr>");
 
+    // Iterate over repositories
     for (Map.Entry<String, Map<String, Map<String, Integer>>> repoEntry : repoBranchCounts.entrySet()) {
         String repoName = repoEntry.getKey();
         Map<String, Map<String, Integer>> branchData = repoEntry.getValue();
 
+        // Iterate over branches within a repository
         for (Map.Entry<String, Map<String, Integer>> branchEntry : branchData.entrySet()) {
             String branchName = branchEntry.getKey();
             Map<String, Integer> developerCounts = branchEntry.getValue();
 
             boolean isFirstBranchRow = true;
 
+            // Iterate over developers within a branch
             for (Map.Entry<String, Integer> devEntry : developerCounts.entrySet()) {
                 String uid = devEntry.getKey();
                 int commitCount = devEntry.getValue();
-
-                // Filter developers if a specific UID is selected
-                if (!developerUid.equals("ALL") && !uid.equals(developerUid)) {
-                    continue;
-                }
 
                 DevInfo devInfo = devMap.get(uid);
                 String name = devInfo != null ? devInfo.getName() : "Unknown Developer";
