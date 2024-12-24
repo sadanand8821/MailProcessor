@@ -160,26 +160,51 @@ public class WebReportServer {
 
     // Utility methods
 
-    private static String generateHtmlReport(Map<String, Integer> finalUidCounts, Map<String, DevInfo> devMap, String developerUid) {
-        StringBuilder html = new StringBuilder();
-        html.append("<table>");
-        html.append("<tr><th>UID</th><th>Name</th><th>Commits</th></tr>");
-        for (Map.Entry<String, Integer> entry : finalUidCounts.entrySet()) {
-            String uid = entry.getKey();
-            int commits = entry.getValue();
+    private static String generateHtmlReport(Map<String, Integer> finalUidCounts, Map<String, DevInfo> devMap, String developerUid, Map<String, Map<String, Map<String, Integer>>> repoBranchCounts) {
+    StringBuilder html = new StringBuilder();
+    html.append("<table>");
+    html.append("<tr><th>Repository</th><th>Branch</th><th>UID</th><th>Name</th><th>Commits</th></tr>");
 
-            if (!developerUid.equals("ALL") && !uid.equals(developerUid)) {
-                continue;
+    for (Map.Entry<String, Map<String, Map<String, Integer>>> repoEntry : repoBranchCounts.entrySet()) {
+        String repoName = repoEntry.getKey();
+        Map<String, Map<String, Integer>> branchData = repoEntry.getValue();
+
+        for (Map.Entry<String, Map<String, Integer>> branchEntry : branchData.entrySet()) {
+            String branchName = branchEntry.getKey();
+            Map<String, Integer> developerCounts = branchEntry.getValue();
+
+            boolean isFirstBranchRow = true;
+
+            for (Map.Entry<String, Integer> devEntry : developerCounts.entrySet()) {
+                String uid = devEntry.getKey();
+                int commitCount = devEntry.getValue();
+
+                // Filter developers if a specific UID is selected
+                if (!developerUid.equals("ALL") && !uid.equals(developerUid)) {
+                    continue;
+                }
+
+                DevInfo devInfo = devMap.get(uid);
+                String name = devInfo != null ? devInfo.getName() : "Unknown Developer";
+
+                html.append("<tr>");
+                if (isFirstBranchRow) {
+                    html.append("<td rowspan='").append(developerCounts.size()).append("'>").append(repoName).append("</td>");
+                    html.append("<td rowspan='").append(developerCounts.size()).append("'>").append(branchName).append("</td>");
+                    isFirstBranchRow = false;
+                }
+
+                html.append("<td>").append(uid).append("</td>");
+                html.append("<td>").append(name).append("</td>");
+                html.append("<td>").append(commitCount).append("</td>");
+                html.append("</tr>");
             }
-
-            String name = (devMap != null && devMap.containsKey(uid)) ? devMap.get(uid).getName() : uid;
-            html.append("<tr><td>").append(uid).append("</td>")
-                    .append("<td>").append(name).append("</td>")
-                    .append("<td>").append(commits).append("</td></tr>");
         }
-        html.append("</table>");
-        return html.toString();
     }
+
+    html.append("</table>");
+    return html.toString();
+}
 
     private static void processRepoBranches(String repoUrl, List<String> branches, String afterDate, String beforeDate, Map<String, Integer> globalAuthorCounts) throws IOException, InterruptedException {
         for (String branch : branches) {
