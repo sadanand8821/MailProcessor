@@ -1,46 +1,26 @@
-import org.json.JSONObject;
-import org.json.JSONArray;
-import java.util.Iterator;
+import groovy.json.JsonSlurper
 
-// Get the response from the previous sampler
-String response = prev.getResponseDataAsString();
+// Get JSON response
+def response = prev.getResponseDataAsString()
 
-// Ensure the response is not null or empty
-if (response == null || response.trim().isEmpty()) {
-    log.warn("Response is empty or null. Skipping JSON parsing.");
-    return;
-}
+// Parse JSON
+def json = new JsonSlurper().parseText(response)
 
-// Parse the JSON
-JSONObject jsonObject = new JSONObject(response);
-
-// Function to extract and store JSON keys in JMeter variables
-void extractKeys(Object obj, String prefix) {
-    if (obj instanceof JSONObject) {
-        JSONObject json = (JSONObject) obj;
-        Iterator<String> keys = json.keys();
-        
-        while (keys.hasNext()) {
-            String key = keys.next();
-            Object value = json.get(key);
-            String fullKey = prefix.isEmpty() ? key : prefix + "." + key;
-            
-            if (value instanceof JSONObject || value instanceof JSONArray) {
-                extractKeys(value, fullKey);
-            } else {
-                vars.put(fullKey, value.toString()); // Store key-value in JMeter variables
-            }
+// Recursive function to extract keys
+def extractKeys(obj, parentKey = "") {
+    if (obj instanceof Map) {
+        obj.each { key, value ->
+            def newKey = parentKey ? "${parentKey}.${key}" : key // Maintain key hierarchy
+            extractKeys(value, newKey)
         }
-    } else if (obj instanceof JSONArray) {
-        JSONArray array = (JSONArray) obj;
-        for (int i = 0; i < array.length(); i++) {
-            extractKeys(array.get(i), prefix + "[" + i + "]");
+    } else if (obj instanceof List) {
+        obj.eachWithIndex { item, index ->
+            extractKeys(item, "${parentKey}[${index}]") // Handle arrays with indices
         }
+    } else {
+        vars.put(parentKey, obj.toString()) // Store in JMeter variables
     }
 }
 
-// Start extracting keys
-extractKeys(jsonObject, "");
-
-// Log success message
-log.info("Extracted JSON keys stored in JMeter variables.");
+// Start extraction
+extractKeys(json)
