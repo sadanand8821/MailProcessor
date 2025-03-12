@@ -1,26 +1,32 @@
 import groovy.json.JsonSlurper
 
-// Get JSON response
+// Sample JSON response (replace this with actual response)
 def response = prev.getResponseDataAsString()
 
 // Parse JSON
 def json = new JsonSlurper().parseText(response)
 
-// Recursive function to extract keys
+// Function to extract all keys recursively
 def extractKeys(obj, parentKey = "") {
-    if (obj instanceof Map) {
-        obj.each { key, value ->
-            def newKey = parentKey ? "${parentKey}.${key}" : key // Maintain key hierarchy
-            extractKeys(value, newKey)
+    obj.each { key, value ->
+        def fullKey = parentKey ? "${parentKey}.${key}" : key
+        vars.put(fullKey, value.toString()) // Store in JMeter variables
+
+        // If the value is another JSON object, recurse
+        if (value instanceof Map) {
+            extractKeys(value, fullKey)
         }
-    } else if (obj instanceof List) {
-        obj.eachWithIndex { item, index ->
-            extractKeys(item, "${parentKey}[${index}]") // Handle arrays with indices
+        // If the value is an array, iterate through elements
+        else if (value instanceof List) {
+            value.eachWithIndex { item, index ->
+                extractKeys(item, "${fullKey}[${index}]")
+            }
         }
-    } else {
-        vars.put(parentKey, obj.toString()) // Store in JMeter variables
     }
 }
 
-// Start extraction
+// Extract keys
 extractKeys(json)
+
+// Print keys for debugging
+log.info("Extracted keys: " + vars.entrySet().toString())
