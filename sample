@@ -1,62 +1,46 @@
-Slide 2: Problem Statement / Current State
+import org.json.JSONObject;
+import org.json.JSONArray;
+import java.util.Iterator;
 
-Business Context
+// Get the response from the previous sampler
+String response = prev.getResponseDataAsString();
 
-Our company operates with a vast and complex codebase spread across multiple GitHub repositories. While we currently utilize GitHub Copilot to assist developers, its limitation to processing only up to five files at a time restricts its effectiveness in our large-scale projects. This limitation hampers developers’ ability to understand code that spans multiple files and modules, which is often the case in our interconnected systems.
+// Ensure the response is not null or empty
+if (response == null || response.trim().isEmpty()) {
+    log.warn("Response is empty or null. Skipping JSON parsing.");
+    return;
+}
 
-New developers joining the team face steep learning curves. Navigating the extensive codebase and understanding the interdependencies between different components can take weeks or even months. This slow onboarding process delays their ability to contribute effectively to projects.
+// Parse the JSON
+JSONObject jsonObject = new JSONObject(response);
 
-Senior developers and code reviewers also face challenges. They spend considerable time assisting newcomers and deciphering code changes that affect multiple parts of the system. This situation diverts their attention from strategic tasks and slows down the overall development process.
+// Function to extract and store JSON keys in JMeter variables
+void extractKeys(Object obj, String prefix) {
+    if (obj instanceof JSONObject) {
+        JSONObject json = (JSONObject) obj;
+        Iterator<String> keys = json.keys();
+        
+        while (keys.hasNext()) {
+            String key = keys.next();
+            Object value = json.get(key);
+            String fullKey = prefix.isEmpty() ? key : prefix + "." + key;
+            
+            if (value instanceof JSONObject || value instanceof JSONArray) {
+                extractKeys(value, fullKey);
+            } else {
+                vars.put(fullKey, value.toString()); // Store key-value in JMeter variables
+            }
+        }
+    } else if (obj instanceof JSONArray) {
+        JSONArray array = (JSONArray) obj;
+        for (int i = 0; i < array.length(); i++) {
+            extractKeys(array.get(i), prefix + "[" + i + "]");
+        }
+    }
+}
 
-Problem Statement
+// Start extracting keys
+extractKeys(jsonObject, "");
 
-The limitations of our current tools, such as GitHub Copilot’s five-file processing cap, impede efficient development in a complex code environment. Developers struggle with:
-	•	Inefficient Onboarding: New team members find it challenging to comprehend the existing codebase due to its size and complexity, leading to prolonged onboarding periods.
-	•	Time-Consuming Code Reviews: Lack of holistic context slows down code reviews, as reviewers must manually trace changes across multiple files and modules.
-	•	Knowledge Silos: Critical insights and understandings of the codebase are confined to individual team members, making knowledge transfer difficult.
-	•	Reduced Productivity: Developers spend excessive time searching for code snippets, documentation, or understanding how different parts of the codebase interact.
-	•	Inadequate Tool Support: Current tools do not adequately support cross-file context, hindering developers from efficiently navigating and modifying the codebase.
-
-These challenges result in delayed project timelines, decreased productivity, and potential errors due to misunderstandings of the codebase.
-
-Slide 4: Solution / Desired State
-
-Our solution is to develop an AI-powered code assistant that transcends the limitations of current tools like GitHub Copilot. This assistant will provide comprehensive support by processing and understanding the entire codebase, without being constrained by the number of files.
-
-Key Features:
-	1.	Real-Time Code Retrieval:
-	•	The assistant will offer instant access to relevant code snippets and documentation from across the entire codebase.
-	•	It will support natural language queries, allowing developers to search effectively without worrying about file limitations.
-	2.	Context-Aware Suggestions:
-	•	By understanding the developer’s current task and the broader code context, the assistant will provide accurate and relevant suggestions.
-	•	It will assist with code completion, bug fixing, and implementing new features, considering multiple files and modules.
-	3.	Adaptability and Continuous Learning:
-	•	To ensure the assistant remains up-to-date, we will implement a system of agents, tasks, and crews.
-	•	Agents will continuously monitor the codebase for updates.
-	•	Tasks will process these updates, breaking down new code into manageable chunks and generating embeddings.
-	•	Crews will coordinate agents and tasks, ensuring the assistant’s knowledge base is updated efficiently and accurately.
-	•	This structure allows the assistant to learn from new code changes and user interactions, improving over time.
-	4.	Model Interpretability and Transparency:
-	•	The assistant will provide clear explanations for its suggestions, helping developers understand the reasoning behind them.
-	•	This transparency builds trust and facilitates learning, especially for new team members.
-	5.	Scalability and Deployment:
-	•	Designed to handle large and growing codebases, the assistant will scale seamlessly with our projects.
-	•	It will integrate with existing development environments and tools, complementing resources like GitHub Copilot.
-
-By incorporating agents, tasks, and crews, we ensure that the assistant is not only reactive but also proactive in maintaining its relevance. Agents monitor for changes, tasks process these changes, and crews manage the overall workflow, creating a dynamic system that adapts to the evolving codebase.
-
-Benefits:
-	•	Enhanced Onboarding:
-	•	New developers can access comprehensive information about the codebase, reducing the time required to become productive.
-	•	Improved Code Reviews:
-	•	Reviewers receive contextual information that spans multiple files, streamlining the review process.
-	•	Knowledge Sharing:
-	•	The assistant serves as a repository of collective knowledge, breaking down silos and facilitating collaboration.
-	•	Increased Productivity:
-	•	Developers spend less time searching for information and more time on actual development, boosting efficiency.
-	•	Higher Code Quality:
-	•	With better understanding and assistance, the likelihood of errors decreases, and adherence to best practices improves.
-
-Our AI-powered code assistant represents a significant advancement over current tools by offering unrestricted access to the codebase and continuously adapting to changes. This solution addresses the core challenges faced by our developers and positions us to achieve greater efficiency and code quality.
-
-By detailing the Business Context, Problem Statement, and Solution / Desired State in paragraphs, we’ve provided a clear narrative that explains the necessity of the proposed AI assistant and how it will function. The inclusion of agents, tasks, and crews highlights the system’s ability to stay current with codebase updates, ensuring it remains a valuable tool for developers.
+// Log success message
+log.info("Extracted JSON keys stored in JMeter variables.");
