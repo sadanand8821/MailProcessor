@@ -1,32 +1,19 @@
-import groovy.json.JsonSlurper
+// Function to split a variable into two parts and store them separately
+def splitVariable(varName) {
+    def originalValue = vars.get(varName)
 
-// Sample JSON response (replace this with actual response)
-def response = prev.getResponseDataAsString()
+    if (originalValue) { // Ensure the variable exists
+        def part1 = originalValue.length() > 10 ? originalValue.substring(0, 10) : originalValue
+        def part2 = originalValue.length() > 10 ? originalValue.substring(10) : ""
 
-// Parse JSON
-def json = new JsonSlurper().parseText(response)
+        vars.put(varName + "_part1", part1)
+        vars.put(varName + "_part2", part2)
 
-// Function to extract all keys recursively
-def extractKeys(obj, parentKey = "") {
-    obj.each { key, value ->
-        def fullKey = parentKey ? "${parentKey}.${key}" : key
-        vars.put(fullKey, value.toString()) // Store in JMeter variables
-
-        // If the value is another JSON object, recurse
-        if (value instanceof Map) {
-            extractKeys(value, fullKey)
-        }
-        // If the value is an array, iterate through elements
-        else if (value instanceof List) {
-            value.eachWithIndex { item, index ->
-                extractKeys(item, "${fullKey}[${index}]")
-            }
-        }
+        log.info("Original: ${originalValue}, Part 1: ${part1}, Part 2: ${part2}")
+    } else {
+        log.warn("Variable '${varName}' not found!")
     }
 }
 
-// Extract keys
-extractKeys(json)
-
-// Print keys for debugging
-log.info("Extracted keys: " + vars.entrySet().toString())
+// Example usage
+splitVariable("yourVariableName")
